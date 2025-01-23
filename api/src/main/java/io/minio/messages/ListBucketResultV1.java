@@ -51,4 +51,14 @@ public class ListBucketResultV1 extends ListObjectsResult {
   public List<Contents> contents() {
     return Utils.unmodifiableList(contents);
   }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "ListBucketResultV1{%s, marker=%s, nextMarker=%s, contents=%s}",
+        super.toString(),
+        Utils.stringify(marker),
+        Utils.stringify(nextMarker),
+        Utils.stringify(contents));
+  }
 }

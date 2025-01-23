@@ -17,10 +17,8 @@
 import io.minio.MinioClient;
 import io.minio.SetBucketLifecycleArgs;
 import io.minio.errors.MinioException;
-import io.minio.messages.Expiration;
+import io.minio.messages.Filter;
 import io.minio.messages.LifecycleConfiguration;
-import io.minio.messages.LifecycleRule;
-import io.minio.messages.RuleFilter;
 import io.minio.messages.Status;
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -48,13 +46,13 @@ public class SetBucketLifecycle {
       //         .credentials("YOUR-ACCESSKEY", "YOUR-SECRETACCESSKEY")
       //         .build();
 
-      List<LifecycleRule> rules = new LinkedList<>();
+      List<LifecycleConfiguration.Rule> rules = new LinkedList<>();
       rules.add(
-          new LifecycleRule(
+          new LifecycleConfiguration.Rule(
               Status.ENABLED,
               null,
-              new Expiration((ZonedDateTime) null, 365, null),
-              new RuleFilter("logs/"),
+              new LifecycleConfiguration.Expiration((ZonedDateTime) null, 365, null),
+              new Filter("logs/"),
               "rule2",
               null,
               null,

@@ -17,7 +17,6 @@
 package io.minio;
 
 import io.minio.messages.LegalHold;
-import io.minio.messages.ResponseDate;
 import io.minio.messages.RetentionMode;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
@@ -54,7 +53,7 @@ public class StatObjectResponse extends GenericResponse {
 
     value = headers.get("x-amz-object-lock-retain-until-date");
     this.retentionRetainUntilDate =
-        (value != null ? ResponseDate.fromString(value).zonedDateTime() : null);
+        value == null ? null : Time.S3Time.fromString(value).toZonedDateTime();
 
     this.legalHold = new LegalHold("ON".equals(headers.get("x-amz-object-lock-legal-hold")));
 

@@ -18,8 +18,8 @@ import io.minio.MinioClient;
 import io.minio.RemoveObjectsArgs;
 import io.minio.Result;
 import io.minio.errors.MinioException;
-import io.minio.messages.DeleteError;
-import io.minio.messages.DeleteObject;
+import io.minio.messages.DeleteRequest;
+import io.minio.messages.DeleteResult;
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -45,15 +45,15 @@ public class RemoveObjects {
       //         .credentials("YOUR-ACCESSKEY", "YOUR-SECRETACCESSKEY")
       //         .build();
 
-      List<DeleteObject> objects = new LinkedList<>();
-      objects.add(new DeleteObject("my-objectname1"));
-      objects.add(new DeleteObject("my-objectname2"));
-      objects.add(new DeleteObject("my-objectname3"));
-      Iterable<Result<DeleteError>> results =
+      List<DeleteRequest.Object> objects = new LinkedList<>();
+      objects.add(new DeleteRequest.Object("my-objectname1"));
+      objects.add(new DeleteRequest.Object("my-objectname2"));
+      objects.add(new DeleteRequest.Object("my-objectname3"));
+      Iterable<Result<DeleteResult.Error>> results =
           minioClient.removeObjects(
               RemoveObjectsArgs.builder().bucket("my-bucketname").objects(objects).build());
-      for (Result<DeleteError> result : results) {
-        DeleteError error = result.get();
+      for (Result<DeleteResult.Error> result : results) {
+        DeleteResult.Error error = result.get();
         System.out.println(
             "Error in deleting object " + error.objectName() + "; " + error.message());
       }

@@ -71,4 +71,17 @@ public class ListBucketResultV2 extends ListObjectsResult {
   public List<Contents> contents() {
     return Utils.unmodifiableList(contents);
   }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "ListBucketResultV2{%s, keyCount=%s, startAfter=%s, continuationToken=%s,"
+            + " nextContinuationToken=%s, contents=%s}",
+        super.toString(),
+        Utils.stringify(keyCount),
+        Utils.stringify(startAfter),
+        Utils.stringify(continuationToken),
+        Utils.stringify(nextContinuationToken),
+        Utils.stringify(contents));
+  }
 }

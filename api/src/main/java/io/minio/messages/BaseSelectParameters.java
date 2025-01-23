@@ -20,9 +20,11 @@ import java.util.Objects;
 import javax.annotation.Nonnull;
 import org.simpleframework.xml.Element;
 
-/** Base class for {@link SelectObjectContentRequest} and {@link SelectParameters}. */
+/**
+ * Base class for {@link SelectObjectContentRequest} and {@link RestoreRequest.SelectParameters}.
+ */
 @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_FIELD")
-public abstract class SelectObjectContentRequestBase {
+public abstract class BaseSelectParameters {
   @Element(name = "Expression")
   private String expression;
 
@@ -35,7 +37,7 @@ public abstract class SelectObjectContentRequestBase {
   @Element(name = "OutputSerialization")
   private OutputSerialization outputSerialization;
 
-  public SelectObjectContentRequestBase(
+  public BaseSelectParameters(
       @Nonnull String expression, @Nonnull InputSerialization is, @Nonnull OutputSerialization os) {
     this.expression = Objects.requireNonNull(expression, "Expression must not be null");
     this.inputSerialization = Objects.requireNonNull(is, "InputSerialization must not be null");

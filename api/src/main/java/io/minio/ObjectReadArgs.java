@@ -21,9 +21,9 @@ import okhttp3.HttpUrl;
 
 /** Base argument class for reading object. */
 public abstract class ObjectReadArgs extends ObjectVersionArgs {
-  protected ServerSideEncryptionCustomerKey ssec;
+  protected ServerSideEncryption.CustomerKey ssec;
 
-  public ServerSideEncryptionCustomerKey ssec() {
+  public ServerSideEncryption.CustomerKey ssec() {
     return ssec;
   }
 
@@ -35,7 +35,7 @@ public abstract class ObjectReadArgs extends ObjectVersionArgs {
   public abstract static class Builder<B extends Builder<B, A>, A extends ObjectReadArgs>
       extends ObjectVersionArgs.Builder<B, A> {
     @SuppressWarnings("unchecked") // Its safe to type cast to B as B is inherited by this class
-    public B ssec(ServerSideEncryptionCustomerKey ssec) {
+    public B ssec(ServerSideEncryption.CustomerKey ssec) {
       operations.add(args -> args.ssec = ssec);
       return (B) this;
     }

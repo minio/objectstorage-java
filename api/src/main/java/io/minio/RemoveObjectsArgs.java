@@ -16,7 +16,7 @@
 
 package io.minio;
 
-import io.minio.messages.DeleteObject;
+import io.minio.messages.DeleteRequest;
 import java.util.LinkedList;
 import java.util.Objects;
 
@@ -25,13 +25,13 @@ import java.util.Objects;
  */
 public class RemoveObjectsArgs extends BucketArgs {
   private boolean bypassGovernanceMode;
-  private Iterable<DeleteObject> objects = new LinkedList<>();
+  private Iterable<DeleteRequest.Object> objects = new LinkedList<>();
 
   public boolean bypassGovernanceMode() {
     return bypassGovernanceMode;
   }
 
-  public Iterable<DeleteObject> objects() {
+  public Iterable<DeleteRequest.Object> objects() {
     return objects;
   }
 
@@ -46,8 +46,8 @@ public class RemoveObjectsArgs extends BucketArgs {
       return this;
     }
 
-    public Builder objects(Iterable<DeleteObject> objects) {
-      validateNotNull(objects, "objects");
+    public Builder objects(Iterable<DeleteRequest.Object> objects) {
+      Utils.validateNotNull(objects, "objects");
       operations.add(args -> args.objects = objects);
       return this;
     }
