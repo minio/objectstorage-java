@@ -43,7 +43,7 @@ public class SetObjectRetentionArgs extends ObjectVersionArgs {
   public static final class Builder
       extends ObjectVersionArgs.Builder<Builder, SetObjectRetentionArgs> {
     private void validateConfig(Retention config) {
-      validateNotNull(config, "retention configuration");
+      Utils.validateNotNull(config, "retention configuration");
     }
 
     protected void validate(SetObjectRetentionArgs args) {

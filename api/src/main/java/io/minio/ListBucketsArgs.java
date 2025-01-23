@@ -51,7 +51,7 @@ public class ListBucketsArgs extends BaseArgs {
     protected void validate(ListBucketsArgs args) {}
 
     public Builder bucketRegion(String region) {
-      validateNullOrNotEmptyString(region, "bucket region");
+      Utils.validateNullOrNotEmptyString(region, "bucket region");
       operations.add(args -> args.bucketRegion = region);
       return this;
     }
@@ -66,13 +66,13 @@ public class ListBucketsArgs extends BaseArgs {
     }
 
     public Builder prefix(String prefix) {
-      validateNullOrNotEmptyString(prefix, "prefix");
+      Utils.validateNullOrNotEmptyString(prefix, "prefix");
       operations.add(args -> args.prefix = prefix);
       return this;
     }
 
     public Builder continuationToken(String continuationToken) {
-      validateNullOrNotEmptyString(continuationToken, "continuation token");
+      Utils.validateNullOrNotEmptyString(continuationToken, "continuation token");
       operations.add(args -> args.continuationToken = continuationToken);
       return this;
     }

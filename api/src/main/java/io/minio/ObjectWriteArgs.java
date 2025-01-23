@@ -82,7 +82,7 @@ public abstract class ObjectWriteArgs extends ObjectArgs {
 
     String tagging =
         tags.get().entrySet().stream()
-            .map(e -> S3Escaper.encode(e.getKey()) + "=" + S3Escaper.encode(e.getValue()))
+            .map(e -> Utils.encode(e.getKey()) + "=" + Utils.encode(e.getValue()))
             .collect(Collectors.joining("&"));
     if (!tagging.isEmpty()) {
       headers.put("x-amz-tagging", tagging);
@@ -92,7 +92,7 @@ public abstract class ObjectWriteArgs extends ObjectArgs {
       headers.put("x-amz-object-lock-mode", retention.mode().name());
       headers.put(
           "x-amz-object-lock-retain-until-date",
-          retention.retainUntilDate().format(Time.RESPONSE_DATE_FORMAT));
+          retention.retainUntilDate().format(Time.ISO8601UTC_FORMAT));
     }
 
     if (legalHold) {
@@ -111,13 +111,13 @@ public abstract class ObjectWriteArgs extends ObjectArgs {
   public abstract static class Builder<B extends Builder<B, A>, A extends ObjectWriteArgs>
       extends ObjectArgs.Builder<B, A> {
     public B headers(Map<String, String> headers) {
-      final Multimap<String, String> headersCopy = toMultimap(headers);
+      final Multimap<String, String> headersCopy = Utils.newMultimap(headers);
       operations.add(args -> args.headers = headersCopy);
       return (B) this;
     }
 
     public B headers(Multimap<String, String> headers) {
-      final Multimap<String, String> headersCopy = copyMultimap(headers);
+      final Multimap<String, String> headersCopy = Utils.newMultimap(headers);
       operations.add(args -> args.headers = headersCopy);
       return (B) this;
     }

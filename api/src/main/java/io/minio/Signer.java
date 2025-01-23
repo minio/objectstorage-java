@@ -200,7 +200,7 @@ public class Signer {
             + "\n"
             + this.contentSha256;
 
-    this.canonicalRequestHash = Digest.sha256Hash(this.canonicalRequest);
+    this.canonicalRequestHash = Checksum.hexString(Checksum.SHA256.sum(this.canonicalRequest));
   }
 
   private void setStringToSign() {
@@ -224,7 +224,7 @@ public class Signer {
             + "\n"
             + this.prevSignature
             + "\n"
-            + Digest.sha256Hash("")
+            + Checksum.ZERO_SHA256_HASH
             + "\n"
             + this.contentSha256;
   }
@@ -318,15 +318,15 @@ public class Signer {
 
     HttpUrl.Builder urlBuilder = this.request.url().newBuilder();
     urlBuilder.addEncodedQueryParameter(
-        S3Escaper.encode("X-Amz-Algorithm"), S3Escaper.encode("AWS4-HMAC-SHA256"));
+        Utils.encode("X-Amz-Algorithm"), Utils.encode("AWS4-HMAC-SHA256"));
     urlBuilder.addEncodedQueryParameter(
-        S3Escaper.encode("X-Amz-Credential"), S3Escaper.encode(this.accessKey + "/" + this.scope));
+        Utils.encode("X-Amz-Credential"), Utils.encode(this.accessKey + "/" + this.scope));
     urlBuilder.addEncodedQueryParameter(
-        S3Escaper.encode("X-Amz-Date"), S3Escaper.encode(this.date.format(Time.AMZ_DATE_FORMAT)));
+        Utils.encode("X-Amz-Date"), Utils.encode(this.date.format(Time.AMZ_DATE_FORMAT)));
     urlBuilder.addEncodedQueryParameter(
-        S3Escaper.encode("X-Amz-Expires"), S3Escaper.encode(Integer.toString(expires)));
+        Utils.encode("X-Amz-Expires"), Utils.encode(Integer.toString(expires)));
     urlBuilder.addEncodedQueryParameter(
-        S3Escaper.encode("X-Amz-SignedHeaders"), S3Escaper.encode(this.signedHeaders));
+        Utils.encode("X-Amz-SignedHeaders"), Utils.encode(this.signedHeaders));
     this.url = urlBuilder.build();
 
     setCanonicalQueryString();
@@ -344,7 +344,7 @@ public class Signer {
             + "\n"
             + this.contentSha256;
 
-    this.canonicalRequestHash = Digest.sha256Hash(this.canonicalRequest);
+    this.canonicalRequestHash = Checksum.hexString(Checksum.SHA256.sum(this.canonicalRequest));
   }
 
   /**
@@ -367,8 +367,7 @@ public class Signer {
     return signer
         .url
         .newBuilder()
-        .addEncodedQueryParameter(
-            S3Escaper.encode("X-Amz-Signature"), S3Escaper.encode(signer.signature))
+        .addEncodedQueryParameter(Utils.encode("X-Amz-Signature"), Utils.encode(signer.signature))
         .build();
   }
 

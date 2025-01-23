@@ -18,7 +18,6 @@ import io.minio.MinioClient;
 import io.minio.SetObjectLockConfigurationArgs;
 import io.minio.errors.MinioException;
 import io.minio.messages.ObjectLockConfiguration;
-import io.minio.messages.RetentionDurationDays;
 import io.minio.messages.RetentionMode;
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -45,7 +44,8 @@ public class SetObjectLockConfiguration {
 
       // Declaring config with Retention mode as Compliance and duration as 100 days
       ObjectLockConfiguration config =
-          new ObjectLockConfiguration(RetentionMode.COMPLIANCE, new RetentionDurationDays(100));
+          new ObjectLockConfiguration(
+              RetentionMode.COMPLIANCE, new ObjectLockConfiguration.RetentionDurationDays(100));
 
       minioClient.setObjectLockConfiguration(
           SetObjectLockConfigurationArgs.builder()

@@ -19,12 +19,10 @@ import io.minio.SetBucketNotificationArgs;
 import io.minio.errors.MinioException;
 import io.minio.messages.EventType;
 import io.minio.messages.NotificationConfiguration;
-import io.minio.messages.QueueConfiguration;
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Arrays;
 
 public class SetBucketNotification {
   /** MinioClient.setBucketNotification() example. */
@@ -45,22 +43,24 @@ public class SetBucketNotification {
       //         .credentials("YOUR-ACCESSKEY", "YOUR-SECRETACCESSKEY")
       //         .build();
 
-      NotificationConfiguration config = new NotificationConfiguration();
-
-      // Add a new SQS configuration.
-      List<QueueConfiguration> queueConfigurationList = new LinkedList<>();
-      QueueConfiguration queueConfiguration = new QueueConfiguration();
-      queueConfiguration.setQueue("arn:minio:sqs::1:webhook");
-
-      List<EventType> eventList = new LinkedList<>();
-      eventList.add(EventType.OBJECT_CREATED_PUT);
-      eventList.add(EventType.OBJECT_CREATED_COPY);
-      queueConfiguration.setEvents(eventList);
-      queueConfiguration.setPrefixRule("images");
-      queueConfiguration.setSuffixRule("pg");
-
-      queueConfigurationList.add(queueConfiguration);
-      config.setQueueConfigurationList(queueConfigurationList);
+      NotificationConfiguration config =
+          new NotificationConfiguration(
+              null,
+              Arrays.asList(
+                  new NotificationConfiguration.QueueConfiguration[] {
+                    // Add a new SQS configuration.
+                    new NotificationConfiguration.QueueConfiguration(
+                        "arn:minio:sqs::1:webhook",
+                        null,
+                        Arrays.asList(
+                            new String[] {
+                              EventType.OBJECT_CREATED_PUT.toString(),
+                              EventType.OBJECT_CREATED_COPY.toString()
+                            }),
+                        new NotificationConfiguration.Filter("images", "pg"))
+                  }),
+              null,
+              null);
 
       // Set updated notification configuration.
       minioClient.setBucketNotification(

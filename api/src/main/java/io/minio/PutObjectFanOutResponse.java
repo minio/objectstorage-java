@@ -17,6 +17,7 @@
 package io.minio;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.ZonedDateTime;
 import java.util.List;
 import okhttp3.Headers;
 
@@ -48,8 +49,7 @@ public class PutObjectFanOutResponse extends GenericUploadResponse {
     private String versionId;
 
     @JsonProperty("lastModified")
-    private String lastModified;
-    // private ResponseDate lastModified;
+    private Time.S3Time lastModified;
 
     @JsonProperty("error")
     private String error;
@@ -68,8 +68,8 @@ public class PutObjectFanOutResponse extends GenericUploadResponse {
       return versionId;
     }
 
-    public String lastModified() {
-      return lastModified;
+    public ZonedDateTime lastModified() {
+      return lastModified == null ? null : lastModified.toZonedDateTime();
     }
 
     public String error() {

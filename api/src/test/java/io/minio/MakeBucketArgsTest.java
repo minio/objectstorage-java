@@ -21,25 +21,25 @@ import org.junit.Assert;
 import org.junit.Test;
 
 public class MakeBucketArgsTest {
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBuild() {
     MakeBucketArgs.builder().build();
     Assert.fail("exception should be thrown");
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBucketBuild1() {
     MakeBucketArgs.builder().objectLock(false).build();
     Assert.fail("exception should be thrown");
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBucketBuild2() {
     MakeBucketArgs.builder().bucket(null).build();
     Assert.fail("exception should be thrown");
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBucketBuild3() {
     MakeBucketArgs.builder().bucket("mybucket").bucket(null).build();
     Assert.fail("exception should be thrown");

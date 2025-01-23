@@ -47,7 +47,7 @@ public class PutObjectArgs extends PutObjectBaseArgs {
     @Override
     protected void validate(PutObjectArgs args) {
       super.validate(args);
-      validateNotNull(args.stream, "stream");
+      Utils.validateNotNull(args.stream, "stream");
     }
 
     /**
@@ -63,7 +63,7 @@ public class PutObjectArgs extends PutObjectBaseArgs {
      * <p>A valid part size is between 5MiB to 5GiB (both limits inclusive).
      */
     public Builder stream(InputStream stream, long objectSize, long partSize) {
-      validateNotNull(stream, "stream");
+      Utils.validateNotNull(stream, "stream");
 
       long[] partinfo = getPartInfo(objectSize, partSize);
       long pSize = partinfo[0];

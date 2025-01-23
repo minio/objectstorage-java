@@ -16,6 +16,7 @@
 
 package io.minio.messages;
 
+import io.minio.Utils;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Namespace;
 import org.simpleframework.xml.Root;
@@ -27,7 +28,7 @@ import org.simpleframework.xml.Root;
  */
 @Root(name = "CompleteMultipartUploadResult")
 @Namespace(reference = "http://s3.amazonaws.com/doc/2006-03-01/")
-public class CompleteMultipartUploadResult {
+public class CompleteMultipartUploadResult extends Checksum {
   @Element(name = "Location")
   private String location;
 
@@ -39,24 +40,6 @@ public class CompleteMultipartUploadResult {
 
   @Element(name = "ETag")
   private String etag;
-
-  @Element(name = "ChecksumCRC32", required = false)
-  private String checksumCRC32;
-
-  @Element(name = "ChecksumCRC32C", required = false)
-  private String checksumCRC32C;
-
-  @Element(name = "ChecksumCRC64NVME", required = false)
-  private String checksumCRC64NVME;
-
-  @Element(name = "ChecksumSHA1", required = false)
-  private String checksumSHA1;
-
-  @Element(name = "ChecksumSHA256", required = false)
-  private String checksumSHA256;
-
-  @Element(name = "ChecksumType", required = false)
-  private String checksumType;
 
   public CompleteMultipartUploadResult() {}
 
@@ -76,27 +59,14 @@ public class CompleteMultipartUploadResult {
     return etag;
   }
 
-  public String checksumCRC32() {
-    return checksumCRC32;
-  }
-
-  public String checksumCRC32C() {
-    return checksumCRC32C;
-  }
-
-  public String checksumCRC64NVME() {
-    return checksumCRC64NVME;
-  }
-
-  public String checksumSHA1() {
-    return checksumSHA1;
-  }
-
-  public String checksumSHA256() {
-    return checksumSHA256;
-  }
-
-  public String checksumType() {
-    return checksumType;
+  @Override
+  public String toString() {
+    return String.format(
+        "CompleteMultipartUploadResult{location=%s, bucket=%s, object=%s, etag=%s, %s}",
+        Utils.stringify(location),
+        Utils.stringify(bucket),
+        Utils.stringify(object),
+        Utils.stringify(etag),
+        super.stringify());
   }
 }

@@ -36,7 +36,7 @@ public class SetBucketCorsArgs extends BucketArgs {
   /** Argument builder of {@link SetBucketCorsArgs}. */
   public static final class Builder extends BucketArgs.Builder<Builder, SetBucketCorsArgs> {
     private void validateCors(CORSConfiguration config) {
-      validateNotNull(config, "CORS configuration");
+      Utils.validateNotNull(config, "CORS configuration");
     }
 
     protected void validate(SetBucketCorsArgs args) {
