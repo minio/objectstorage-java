@@ -2660,26 +2660,6 @@ public class MinioClient implements AutoCloseable {
     asyncClient.traceOff();
   }
 
-  /**
-   * Enables accelerate endpoint for Amazon S3 endpoint.
-   *
-   * @deprecated This method is no longer supported.
-   */
-  @Deprecated
-  public void enableAccelerateEndpoint() {
-    asyncClient.enableAccelerateEndpoint();
-  }
-
-  /**
-   * Disables accelerate endpoint for Amazon S3 endpoint.
-   *
-   * @deprecated This method is no longer supported.
-   */
-  @Deprecated
-  public void disableAccelerateEndpoint() {
-    asyncClient.disableAccelerateEndpoint();
-  }
-
   /** Enables dual-stack endpoint for Amazon S3 endpoint. */
   public void enableDualStackEndpoint() {
     asyncClient.enableDualStackEndpoint();
