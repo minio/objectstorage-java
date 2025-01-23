@@ -16,7 +16,9 @@
 
 package io.minio.messages;
 
+import io.minio.Time;
 import io.minio.Utils;
+import java.time.ZonedDateTime;
 import java.util.List;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.ElementList;
@@ -102,5 +104,123 @@ public class ListMultipartUploadsResult {
   /** Returns List of Upload. */
   public List<Upload> uploads() {
     return Utils.unmodifiableList(uploads);
+  }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "ListMultipartUploadsResult{bucketName=%s, encodingType=%s, keyMarker=%s,"
+            + " uploadIdMarker=%s, nextKeyMarker=%s, nextUploadIdMarker=%s, maxUploads=%s,"
+            + " isTruncated=%s, uploads=%s}",
+        Utils.stringify(bucketName),
+        Utils.stringify(encodingType),
+        Utils.stringify(keyMarker),
+        Utils.stringify(uploadIdMarker),
+        Utils.stringify(nextKeyMarker),
+        Utils.stringify(nextUploadIdMarker),
+        Utils.stringify(maxUploads),
+        Utils.stringify(isTruncated),
+        Utils.stringify(uploads));
+  }
+
+  @Root(name = "Upload", strict = false)
+  @Namespace(reference = "http://s3.amazonaws.com/doc/2006-03-01/")
+  public static class Upload {
+    @Element(name = "Key")
+    private String objectName;
+
+    @Element(name = "UploadId")
+    private String uploadId;
+
+    @Element(name = "Initiator")
+    private Initiator initiator;
+
+    @Element(name = "Owner")
+    private Owner owner;
+
+    @Element(name = "StorageClass")
+    private String storageClass;
+
+    @Element(name = "Initiated")
+    private Time.S3Time initiated;
+
+    @Element(name = "ChecksumAlgorithm", required = false)
+    private String checksumAlgorithm;
+
+    @Element(name = "ChecksumType", required = false)
+    private String checksumType;
+
+    private long aggregatedPartSize;
+    private String encodingType = null;
+
+    public Upload() {}
+
+    /** Returns object name. */
+    public String objectName() {
+      return Utils.urlDecode(objectName, encodingType);
+    }
+
+    /** Returns upload ID. */
+    public String uploadId() {
+      return uploadId;
+    }
+
+    /** Returns initiator information. */
+    public Initiator initiator() {
+      return initiator;
+    }
+
+    /** Returns owner information. */
+    public Owner owner() {
+      return owner;
+    }
+
+    /** Returns storage class. */
+    public String storageClass() {
+      return storageClass;
+    }
+
+    /** Returns initiated time. */
+    public ZonedDateTime initiated() {
+      return initiated == null ? null : initiated.toZonedDateTime();
+    }
+
+    /** Returns aggregated part size. */
+    public long aggregatedPartSize() {
+      return aggregatedPartSize;
+    }
+
+    /** Sets given aggregated part size. */
+    public void setAggregatedPartSize(long size) {
+      this.aggregatedPartSize = size;
+    }
+
+    public void setEncodingType(String encodingType) {
+      this.encodingType = encodingType;
+    }
+
+    public String checksumAlgorithm() {
+      return checksumAlgorithm;
+    }
+
+    public String checksumType() {
+      return checksumType;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "Upload{objectName=%s, uploadId=%s, initiator=%s, owner=%s, storageClass=%s, "
+              + "initiated=%s, checksumAlgorithm=%s, checksumType=%s, aggregatedPartSize=%s}",
+          Utils.stringify(objectName),
+          Utils.stringify(uploadId),
+          Utils.stringify(initiator),
+          Utils.stringify(owner),
+          Utils.stringify(storageClass),
+          Utils.stringify(initiated),
+          Utils.stringify(checksumAlgorithm),
+          Utils.stringify(checksumType),
+          Utils.stringify(aggregatedPartSize));
+    }
   }
 }

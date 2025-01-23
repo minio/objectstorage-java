@@ -16,6 +16,7 @@
 
 package io.minio.messages;
 
+import io.minio.Utils;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Root;
 
@@ -42,5 +43,11 @@ public class Owner {
   /** Returns owner display name. */
   public String displayName() {
     return displayName;
+  }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "Owner{id=%s, displayName=%s}", Utils.stringify(id), Utils.stringify(displayName));
   }
 }

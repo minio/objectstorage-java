@@ -17,12 +17,8 @@
 import io.minio.MinioClient;
 import io.minio.SetBucketReplicationArgs;
 import io.minio.errors.MinioException;
-import io.minio.messages.AndOperator;
-import io.minio.messages.DeleteMarkerReplication;
+import io.minio.messages.Filter;
 import io.minio.messages.ReplicationConfiguration;
-import io.minio.messages.ReplicationDestination;
-import io.minio.messages.ReplicationRule;
-import io.minio.messages.RuleFilter;
 import io.minio.messages.Status;
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -55,20 +51,20 @@ public class SetBucketReplication {
       tags.put("key1", "value1");
       tags.put("key2", "value2");
 
-      ReplicationRule rule =
-          new ReplicationRule(
-              new DeleteMarkerReplication(Status.DISABLED),
-              new ReplicationDestination(
+      ReplicationConfiguration.Rule rule =
+          new ReplicationConfiguration.Rule(
+              new ReplicationConfiguration.DeleteMarkerReplication(Status.DISABLED),
+              new ReplicationConfiguration.Destination(
                   null, null, "REPLACE-WITH-ACTUAL-DESTINATION-BUCKET-ARN", null, null, null, null),
               null,
-              new RuleFilter(new AndOperator("TaxDocs", tags)),
+              new Filter(new Filter.And("TaxDocs", tags)),
               "rule1",
               null,
               1,
               null,
               Status.ENABLED);
 
-      List<ReplicationRule> rules = new LinkedList<>();
+      List<ReplicationConfiguration.Rule> rules = new LinkedList<>();
       rules.add(rule);
 
       ReplicationConfiguration config =

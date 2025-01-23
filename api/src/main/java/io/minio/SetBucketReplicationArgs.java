@@ -42,11 +42,11 @@ public class SetBucketReplicationArgs extends BucketArgs {
   /** Argument builder of {@link SetBucketReplicationArgs}. */
   public static final class Builder extends BucketArgs.Builder<Builder, SetBucketReplicationArgs> {
     private void validateConfig(ReplicationConfiguration config) {
-      validateNotNull(config, "replication configuration");
+      Utils.validateNotNull(config, "replication configuration");
     }
 
     private void validateObjectLockToken(String token) {
-      validateNullOrNotEmptyString(token, "object lock token");
+      Utils.validateNullOrNotEmptyString(token, "object lock token");
     }
 
     @Override

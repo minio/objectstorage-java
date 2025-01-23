@@ -87,12 +87,12 @@ public class PutObjectFanOutArgs extends BucketArgs {
     @Override
     protected void validate(PutObjectFanOutArgs args) {
       super.validate(args);
-      validateNotNull(args.stream, "stream");
-      validateNotNull(args.entries, "fan-out entries");
+      Utils.validateNotNull(args.stream, "stream");
+      Utils.validateNotNull(args.entries, "fan-out entries");
     }
 
     public Builder stream(InputStream stream, long size) {
-      validateNotNull(stream, "stream");
+      Utils.validateNotNull(stream, "stream");
       if (size < 0) {
         throw new IllegalArgumentException("invalid stream size " + size);
       }

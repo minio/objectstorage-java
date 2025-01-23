@@ -24,25 +24,25 @@ import org.junit.Assert;
 import org.junit.Test;
 
 public class StatObjectArgsTest {
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBuild() {
     StatObjectArgs.builder().build();
     Assert.fail("exception should be thrown");
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBucketBuild1() {
     StatObjectArgs.builder().object("myobject").build();
     Assert.fail("exception should be thrown");
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBucketBuild2() {
     StatObjectArgs.builder().object("myobject").bucket(null).build();
     Assert.fail("exception should be thrown");
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyBucketBuild3() {
     StatObjectArgs.builder().bucket("mybucket").bucket(null).build();
     Assert.fail("exception should be thrown");
@@ -54,7 +54,7 @@ public class StatObjectArgsTest {
     Assert.fail("exception should be thrown");
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = NullPointerException.class)
   public void testEmptyObjectBuild1() {
     StatObjectArgs.builder().object(null).build();
     Assert.fail("exception should be thrown");
@@ -70,8 +70,8 @@ public class StatObjectArgsTest {
   public void testBuild() throws NoSuchAlgorithmException, InvalidKeyException {
     KeyGenerator keyGen = KeyGenerator.getInstance("AES");
     keyGen.init(256);
-    ServerSideEncryptionCustomerKey ssec =
-        new ServerSideEncryptionCustomerKey(keyGen.generateKey());
+    ServerSideEncryption.CustomerKey ssec =
+        new ServerSideEncryption.CustomerKey(keyGen.generateKey());
     StatObjectArgs args =
         StatObjectArgs.builder()
             .bucket("mybucket")

@@ -17,9 +17,18 @@
 
 package io.minio;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
 import java.util.Locale;
+import org.simpleframework.xml.Root;
+import org.simpleframework.xml.convert.Convert;
+import org.simpleframework.xml.convert.Converter;
+import org.simpleframework.xml.stream.InputNode;
+import org.simpleframework.xml.stream.OutputNode;
 
 /** Time formatters for S3 APIs. */
 public class Time {
@@ -28,7 +37,7 @@ public class Time {
   public static final DateTimeFormatter AMZ_DATE_FORMAT =
       DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'", Locale.US).withZone(UTC);
 
-  public static final DateTimeFormatter RESPONSE_DATE_FORMAT =
+  public static final DateTimeFormatter ISO8601UTC_FORMAT =
       DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH':'mm':'ss'.'SSS'Z'", Locale.US).withZone(UTC);
 
   // Formatted string is convertible to LocalDate only, not to LocalDateTime or ZonedDateTime.
@@ -40,7 +49,54 @@ public class Time {
   public static final DateTimeFormatter HTTP_HEADER_DATE_FORMAT =
       DateTimeFormatter.ofPattern("EEE',' dd MMM yyyy HH':'mm':'ss 'GMT'", Locale.US).withZone(UTC);
 
-  public static final DateTimeFormatter EXPIRATION_DATE_FORMAT = RESPONSE_DATE_FORMAT;
-
   private Time() {}
+
+  /** Wrapped {@link ZonedDateTime} to handle ISO8601UTC format. */
+  @Root
+  @Convert(S3Time.S3TimeConverter.class)
+  public static class S3Time {
+    // ISO8601UTC format handles 0 or more digits of fraction-of-second
+    private static final DateTimeFormatter FORMAT =
+        new DateTimeFormatterBuilder()
+            .appendPattern("yyyy-MM-dd'T'HH':'mm':'ss")
+            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+            .appendPattern("'Z'")
+            .toFormatter(Locale.US)
+            .withZone(UTC);
+
+    private ZonedDateTime value;
+
+    public S3Time() {}
+
+    public S3Time(ZonedDateTime value) {
+      this.value = value;
+    }
+
+    public ZonedDateTime toZonedDateTime() {
+      return value;
+    }
+
+    @Override
+    public String toString() {
+      return value == null ? null : value.format(ISO8601UTC_FORMAT);
+    }
+
+    @JsonCreator
+    public static S3Time fromString(String value) {
+      return new S3Time(ZonedDateTime.parse(value, FORMAT));
+    }
+
+    /** XML converter class. */
+    public static class S3TimeConverter implements Converter<S3Time> {
+      @Override
+      public S3Time read(InputNode node) throws Exception {
+        return S3Time.fromString(node.getValue());
+      }
+
+      @Override
+      public void write(OutputNode node, S3Time time) {
+        node.setValue(time.toString());
+      }
+    }
+  }
 }

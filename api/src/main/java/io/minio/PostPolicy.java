@@ -187,7 +187,7 @@ public class PostPolicy {
     }
 
     Map<String, Object> policyMap = new HashMap<>();
-    policyMap.put("expiration", expiration.format(Time.EXPIRATION_DATE_FORMAT));
+    policyMap.put("expiration", expiration.format(Time.ISO8601UTC_FORMAT));
     List<List<Object>> conditionList = new LinkedList<>();
     conditionList.add(Arrays.asList(new Object[] {"eq", "$bucket", bucketName}));
     for (Map.Entry<String, Map<String, String>> condition : conditions.entrySet()) {

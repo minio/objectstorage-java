@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import io.minio.messages.ResponseDate;
+import io.minio.Time;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -248,7 +248,7 @@ public class IamAwsProvider extends EnvironmentProvider {
     private String sessionToken;
 
     @JsonProperty("Expiration")
-    private ResponseDate expiration;
+    private Time.S3Time expiration;
 
     @JsonProperty("Code")
     private String code;

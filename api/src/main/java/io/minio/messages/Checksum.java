@@ -18,6 +18,7 @@ package io.minio.messages;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+import io.minio.Utils;
 import java.util.Locale;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Root;
@@ -44,6 +45,21 @@ public class Checksum {
   private String checksumType;
 
   public Checksum() {}
+
+  public Checksum(
+      String checksumCRC32,
+      String checksumCRC32C,
+      String checksumCRC64NVME,
+      String checksumSHA1,
+      String checksumSHA256,
+      String checksumType) {
+    this.checksumCRC32 = checksumCRC32;
+    this.checksumCRC32C = checksumCRC32C;
+    this.checksumCRC64NVME = checksumCRC64NVME;
+    this.checksumSHA1 = checksumSHA1;
+    this.checksumSHA256 = checksumSHA256;
+    this.checksumType = checksumType;
+  }
 
   public String checksumCRC32() {
     return checksumCRC32;
@@ -84,5 +100,22 @@ public class Checksum {
     addHeader(map, "SHA1", checksumSHA1);
     addHeader(map, "SHA256", checksumSHA256);
     return map;
+  }
+
+  protected String stringify() {
+    return String.format(
+        "checksumCRC32=%s, checksumCRC32C=%s, checksumCRC64NVME=%s, checksumSHA1=%s,"
+            + " checksumSHA256=%s, checksumType=%s",
+        Utils.stringify(checksumCRC32),
+        Utils.stringify(checksumCRC32C),
+        Utils.stringify(checksumCRC64NVME),
+        Utils.stringify(checksumSHA1),
+        Utils.stringify(checksumSHA256),
+        Utils.stringify(checksumType));
+  }
+
+  @Override
+  public String toString() {
+    return String.format("Checksum{%s}", stringify());
   }
 }

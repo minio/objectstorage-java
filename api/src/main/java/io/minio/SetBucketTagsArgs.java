@@ -37,7 +37,7 @@ public class SetBucketTagsArgs extends BucketArgs {
   /** Argument builder of {@link SetBucketTagsArgs}. */
   public static final class Builder extends BucketArgs.Builder<Builder, SetBucketTagsArgs> {
     private void validateTags(Tags tags) {
-      validateNotNull(tags, "tags");
+      Utils.validateNotNull(tags, "tags");
     }
 
     protected void validate(SetBucketTagsArgs args) {
@@ -46,7 +46,7 @@ public class SetBucketTagsArgs extends BucketArgs {
     }
 
     public Builder tags(Map<String, String> map) {
-      validateNotNull(map, "map for tags");
+      Utils.validateNotNull(map, "map for tags");
       operations.add(args -> args.tags = Tags.newBucketTags(map));
       return this;
     }

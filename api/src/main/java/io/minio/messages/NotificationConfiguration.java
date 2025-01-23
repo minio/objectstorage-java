@@ -17,10 +17,14 @@
 package io.minio.messages;
 
 import io.minio.Utils;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
+import javax.annotation.Nonnull;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.ElementList;
 import org.simpleframework.xml.Namespace;
+import org.simpleframework.xml.Path;
 import org.simpleframework.xml.Root;
 
 /**
@@ -34,63 +38,271 @@ import org.simpleframework.xml.Root;
 @Namespace(reference = "http://s3.amazonaws.com/doc/2006-03-01/")
 public class NotificationConfiguration {
   @ElementList(name = "CloudFunctionConfiguration", inline = true, required = false)
-  private List<CloudFunctionConfiguration> cloudFunctionConfigurationList;
+  private List<CloudFunctionConfiguration> cloudFunctionConfigurations;
 
   @ElementList(name = "QueueConfiguration", inline = true, required = false)
-  private List<QueueConfiguration> queueConfigurationList;
+  private List<QueueConfiguration> queueConfigurations;
 
   @ElementList(name = "TopicConfiguration", inline = true, required = false)
-  private List<TopicConfiguration> topicConfigurationList;
+  private List<TopicConfiguration> topicConfigurations;
 
   @Element(name = "EventBridgeConfiguration", required = false)
   private EventBridgeConfiguration eventBridgeConfiguration;
 
-  public NotificationConfiguration() {}
+  private NotificationConfiguration() {}
 
-  /** Returns cloud function configuration. */
-  public List<CloudFunctionConfiguration> cloudFunctionConfigurationList() {
-    return Utils.unmodifiableList(cloudFunctionConfigurationList);
+  public NotificationConfiguration(
+      @ElementList(name = "CloudFunctionConfiguration", inline = true, required = false)
+          List<CloudFunctionConfiguration> cloudFunctionConfigurations,
+      @ElementList(name = "QueueConfiguration", inline = true, required = false)
+          List<QueueConfiguration> queueConfigurations,
+      @ElementList(name = "TopicConfiguration", inline = true, required = false)
+          List<TopicConfiguration> topicConfigurations,
+      @Element(name = "EventBridgeConfiguration", required = false)
+          EventBridgeConfiguration eventBridgeConfiguration) {
+    this.cloudFunctionConfigurations = cloudFunctionConfigurations;
+    this.queueConfigurations = queueConfigurations;
+    this.topicConfigurations = topicConfigurations;
+    this.eventBridgeConfiguration = eventBridgeConfiguration;
   }
 
-  /** Sets cloud function configuration list. */
-  public void setCloudFunctionConfigurationList(
-      List<CloudFunctionConfiguration> cloudFunctionConfigurationList) {
-    this.cloudFunctionConfigurationList =
-        cloudFunctionConfigurationList == null
-            ? null
-            : Utils.unmodifiableList(cloudFunctionConfigurationList);
+  /** Returns cloud function configuration. */
+  public List<CloudFunctionConfiguration> cloudFunctionConfigurations() {
+    return Utils.unmodifiableList(cloudFunctionConfigurations);
   }
 
   /** Returns queue configuration list. */
-  public List<QueueConfiguration> queueConfigurationList() {
-    return Utils.unmodifiableList(queueConfigurationList);
-  }
-
-  /** Sets queue configuration list. */
-  public void setQueueConfigurationList(List<QueueConfiguration> queueConfigurationList) {
-    this.queueConfigurationList =
-        queueConfigurationList == null ? null : Utils.unmodifiableList(queueConfigurationList);
+  public List<QueueConfiguration> queueConfigurations() {
+    return Utils.unmodifiableList(queueConfigurations);
   }
 
   /** Returns topic configuration list. */
-  public List<TopicConfiguration> topicConfigurationList() {
-    return Utils.unmodifiableList(topicConfigurationList);
-  }
-
-  /** Sets topic configuration list. */
-  public void setTopicConfigurationList(List<TopicConfiguration> topicConfigurationList) {
-    this.topicConfigurationList =
-        topicConfigurationList == null ? null : Utils.unmodifiableList(topicConfigurationList);
+  public List<TopicConfiguration> topicConfigurations() {
+    return Utils.unmodifiableList(topicConfigurations);
   }
 
   public EventBridgeConfiguration eventBridgeConfiguration() {
     return this.eventBridgeConfiguration;
   }
 
-  public void setEventBridgeConfiguration(EventBridgeConfiguration config) {
-    this.eventBridgeConfiguration = config;
+  @Override
+  public String toString() {
+    return String.format(
+        "NotificationConfiguration{cloudFunctionConfigurations=%s, queueConfigurations=%s,"
+            + " topicConfigurations=%s, eventBridgeConfiguration=%s}",
+        Utils.stringify(cloudFunctionConfigurations),
+        Utils.stringify(queueConfigurations),
+        Utils.stringify(topicConfigurations),
+        Utils.stringify(eventBridgeConfiguration));
   }
 
   @Root(name = "EventBridgeConfiguration")
-  public static class EventBridgeConfiguration {}
+  public static class EventBridgeConfiguration {
+    @Override
+    public String toString() {
+      return String.format("EventBridgeConfiguration{}");
+    }
+  }
+
+  public abstract static class BaseConfiguration {
+    @Element(name = "Id", required = false)
+    private String id;
+
+    @ElementList(entry = "Event", inline = true)
+    private List<String> events;
+
+    @Element(name = "Filter", required = false)
+    private Filter filter;
+
+    public BaseConfiguration(String id, @Nonnull List<String> events, Filter filter) {
+      this.id = id;
+      this.events =
+          Utils.unmodifiableList(Objects.requireNonNull(events, "Events must not be null"));
+      this.filter = filter;
+    }
+
+    public String id() {
+      return id;
+    }
+
+    public List<String> events() {
+      return Utils.unmodifiableList(events);
+    }
+
+    public Filter filter() {
+      return filter;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "id=%s, events=%s, filter=%s",
+          Utils.stringify(id), Utils.stringify(events), Utils.stringify(filter));
+    }
+  }
+
+  @Root(name = "Filter")
+  public static class Filter {
+    @Path(value = "S3Key")
+    @ElementList(name = "FilterRule", inline = true)
+    private List<FilterRule> rules;
+
+    public Filter(
+        @Nonnull @Path(value = "S3Key") @ElementList(name = "FilterRule", inline = true)
+            List<FilterRule> rules) {
+      Objects.requireNonNull(rules, "Filter rules must not be null");
+      if (rules.size() < 1) {
+        throw new IllegalArgumentException("At least one rule must be provided");
+      }
+      if (rules.size() > 2) {
+        throw new IllegalArgumentException("Maximum two rules must be provided");
+      }
+      if (rules.size() == 2 && rules.get(0).name().equals(rules.get(1).name())) {
+        throw new IllegalArgumentException(
+            "Two rules '" + rules.get(0).name() + "' must not be same");
+      }
+      this.rules = Utils.unmodifiableList(rules);
+    }
+
+    public Filter(@Nonnull String prefix, @Nonnull String suffix) {
+      if (prefix == null && suffix == null) {
+        throw new IllegalArgumentException("Either prefix or suffix must be provided");
+      }
+      List<FilterRule> rules = new LinkedList<>();
+      if (prefix != null) rules.add(FilterRule.newPrefixFilterRule(prefix));
+      if (suffix != null) rules.add(FilterRule.newSuffixFilterRule(suffix));
+      this.rules = Utils.unmodifiableList(rules);
+    }
+
+    public List<FilterRule> rules() {
+      return rules;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("Filter{rules=%s}", Utils.stringify(rules));
+    }
+  }
+
+  @Root(name = "FilterRule")
+  public static class FilterRule {
+    @Element(name = "Name")
+    private String name;
+
+    @Element(name = "Value")
+    private String value;
+
+    public FilterRule(
+        @Nonnull @Element(name = "Name") String name,
+        @Nonnull @Element(name = "Value") String value) {
+      Objects.requireNonNull(name, "Name must not be null");
+      if (!"prefix".equals(name) && !"suffix".equals(name)) {
+        throw new IllegalArgumentException("Name must be 'prefix' or 'suffix'");
+      }
+      Objects.requireNonNull(value, "Value must not be null");
+      this.name = name;
+      this.value = value;
+    }
+
+    public static FilterRule newPrefixFilterRule(@Nonnull String value) {
+      return new FilterRule("prefix", value);
+    }
+
+    public static FilterRule newSuffixFilterRule(@Nonnull String value) {
+      return new FilterRule("suffix", value);
+    }
+
+    public String name() {
+      return name;
+    }
+
+    public String value() {
+      return value;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "FilterRule{name=%s, value=%s}", Utils.stringify(name), Utils.stringify(value));
+    }
+  }
+
+  @Root(name = "CloudFunctionConfiguration", strict = false)
+  public static class CloudFunctionConfiguration extends BaseConfiguration {
+    @Element(name = "CloudFunction")
+    private String cloudFunction;
+
+    public CloudFunctionConfiguration(
+        @Nonnull @Element(name = "CloudFunction") String cloudFunction,
+        @Element(name = "Id", required = false) String id,
+        @Nonnull @ElementList(entry = "Event", inline = true) List<String> events,
+        @Element(name = "Filter", required = false) Filter filter) {
+      super(id, events, filter);
+      this.cloudFunction = cloudFunction;
+    }
+
+    /** Returns cloudFunction. */
+    public String cloudFunction() {
+      return cloudFunction;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "CloudFunctionConfiguration{cloudFunction=%s, %s}",
+          Utils.stringify(cloudFunction), super.toString());
+    }
+  }
+
+  @Root(name = "QueueConfiguration", strict = false)
+  public static class QueueConfiguration extends BaseConfiguration {
+    @Element(name = "Queue")
+    private String queue;
+
+    public QueueConfiguration(
+        @Nonnull @Element(name = "Queue") String queue,
+        @Element(name = "Id", required = false) String id,
+        @Nonnull @ElementList(entry = "Event", inline = true) List<String> events,
+        @Element(name = "Filter", required = false) Filter filter) {
+      super(id, events, filter);
+      this.queue = queue;
+    }
+
+    /** Returns queue. */
+    public String queue() {
+      return queue;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "QueueConfiguration{queue=%s, %s}", Utils.stringify(queue), super.toString());
+    }
+  }
+
+  @Root(name = "TopicConfiguration", strict = false)
+  public static class TopicConfiguration extends BaseConfiguration {
+    @Element(name = "Topic")
+    private String topic;
+
+    public TopicConfiguration(
+        @Nonnull @Element(name = "Topic") String topic,
+        @Element(name = "Id", required = false) String id,
+        @Nonnull @ElementList(entry = "Event", inline = true) List<String> events,
+        @Element(name = "Filter", required = false) Filter filter) {
+      super(id, events, filter);
+      this.topic = topic;
+    }
+
+    /** Returns topic. */
+    public String topic() {
+      return topic;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "TopicConfiguration{topic=%s, %s}", Utils.stringify(topic), super.toString());
+    }
+  }
 }

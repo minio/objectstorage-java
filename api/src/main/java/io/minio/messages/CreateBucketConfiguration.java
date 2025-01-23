@@ -21,7 +21,7 @@ import org.simpleframework.xml.Namespace;
 import org.simpleframework.xml.Root;
 
 /**
- * Object representation of response XML of <a
+ * Object representation of request XML of <a
  * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html">CreateBucket
  * API</a>.
  */

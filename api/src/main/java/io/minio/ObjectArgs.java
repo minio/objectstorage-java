@@ -30,7 +30,7 @@ public abstract class ObjectArgs extends BucketArgs {
   public abstract static class Builder<B extends Builder<B, A>, A extends ObjectArgs>
       extends BucketArgs.Builder<B, A> {
     protected void validateObjectName(String name) {
-      validateNotEmptyString(name, "object name");
+      Utils.validateNotEmptyString(name, "object name");
       if (skipValidation) {
         return;
       }

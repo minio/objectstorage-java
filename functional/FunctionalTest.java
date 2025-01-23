@@ -55,6 +55,7 @@ import io.minio.GetObjectLockConfigurationArgs;
 import io.minio.GetObjectRetentionArgs;
 import io.minio.GetObjectTagsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.Http;
 import io.minio.IsObjectLegalHoldEnabledArgs;
 import io.minio.ListBucketsArgs;
 import io.minio.ListObjectsArgs;
@@ -73,9 +74,6 @@ import io.minio.Result;
 import io.minio.SelectObjectContentArgs;
 import io.minio.SelectResponseStream;
 import io.minio.ServerSideEncryption;
-import io.minio.ServerSideEncryptionCustomerKey;
-import io.minio.ServerSideEncryptionKms;
-import io.minio.ServerSideEncryptionS3;
 import io.minio.SetBucketCorsArgs;
 import io.minio.SetBucketEncryptionArgs;
 import io.minio.SetBucketLifecycleArgs;
@@ -96,38 +94,22 @@ import io.minio.UploadSnowballObjectsArgs;
 import io.minio.Xml;
 import io.minio.admin.MinioAdminClient;
 import io.minio.errors.ErrorResponseException;
-import io.minio.http.HttpUtils;
-import io.minio.http.Method;
+import io.minio.messages.AccessControlList;
 import io.minio.messages.AccessControlPolicy;
-import io.minio.messages.AndOperator;
-import io.minio.messages.Bucket;
 import io.minio.messages.CORSConfiguration;
-import io.minio.messages.DeleteMarkerReplication;
-import io.minio.messages.DeleteObject;
-import io.minio.messages.Event;
+import io.minio.messages.DeleteRequest;
 import io.minio.messages.EventType;
-import io.minio.messages.Expiration;
-import io.minio.messages.FileHeaderInfo;
-import io.minio.messages.GranteeType;
+import io.minio.messages.Filter;
 import io.minio.messages.InputSerialization;
 import io.minio.messages.LifecycleConfiguration;
-import io.minio.messages.LifecycleRule;
+import io.minio.messages.ListAllMyBucketsResult;
 import io.minio.messages.NotificationConfiguration;
 import io.minio.messages.NotificationRecords;
 import io.minio.messages.ObjectLockConfiguration;
 import io.minio.messages.OutputSerialization;
-import io.minio.messages.Permission;
-import io.minio.messages.QueueConfiguration;
-import io.minio.messages.QuoteFields;
 import io.minio.messages.ReplicationConfiguration;
-import io.minio.messages.ReplicationDestination;
-import io.minio.messages.ReplicationRule;
 import io.minio.messages.Retention;
-import io.minio.messages.RetentionDuration;
-import io.minio.messages.RetentionDurationDays;
-import io.minio.messages.RetentionDurationYears;
 import io.minio.messages.RetentionMode;
-import io.minio.messages.RuleFilter;
 import io.minio.messages.SseAlgorithm;
 import io.minio.messages.SseConfiguration;
 import io.minio.messages.Stats;
@@ -205,8 +187,8 @@ public class FunctionalTest {
   private static MinioClient client = null;
   private static TestMinioAdminClient adminClientTests;
 
-  private static ServerSideEncryptionCustomerKey ssec = null;
-  private static ServerSideEncryption sseS3 = new ServerSideEncryptionS3();
+  private static ServerSideEncryption.CustomerKey ssec = null;
+  private static ServerSideEncryption sseS3 = new ServerSideEncryption.S3();
   private static ServerSideEncryption sseKms = null;
 
   static {
@@ -220,7 +202,7 @@ public class FunctionalTest {
     try {
       KeyGenerator keyGen = KeyGenerator.getInstance("AES");
       keyGen.init(256);
-      ssec = new ServerSideEncryptionCustomerKey(keyGen.generateKey());
+      ssec = new ServerSideEncryption.CustomerKey(keyGen.generateKey());
     } catch (InvalidKeyException | NoSuchAlgorithmException e) {
       throw new RuntimeException(e);
     }
@@ -228,11 +210,7 @@ public class FunctionalTest {
 
   public static OkHttpClient newHttpClient() {
     try {
-      return HttpUtils.disableCertCheck(
-          HttpUtils.newDefaultHttpClient(
-              TimeUnit.MINUTES.toMillis(5),
-              TimeUnit.MINUTES.toMillis(5),
-              TimeUnit.MINUTES.toMillis(5)));
+      return Http.disableCertCheck(Http.newDefaultClient());
     } catch (KeyManagementException | NoSuchAlgorithmException e) {
       throw new RuntimeException(e);
     }
@@ -574,9 +552,9 @@ public class FunctionalTest {
         expectedBucketNames.add(bucketName);
 
         List<String> bucketNames = new LinkedList<>();
-        for (Result<Bucket> result :
+        for (Result<ListAllMyBucketsResult.Bucket> result :
             client.listBuckets(ListBucketsArgs.builder().maxBuckets(1).build())) {
-          Bucket bucket = result.get();
+          ListAllMyBucketsResult.Bucket bucket = result.get();
           if (expectedBucketNames.contains(bucket.name())) {
             bucketNames.add(bucket.name());
           }
@@ -1012,9 +990,9 @@ public class FunctionalTest {
     try {
       client.putObject(args);
       try {
-        ServerSideEncryptionCustomerKey ssec = null;
-        if (args.sse() instanceof ServerSideEncryptionCustomerKey) {
-          ssec = (ServerSideEncryptionCustomerKey) args.sse();
+        ServerSideEncryption.CustomerKey ssec = null;
+        if (args.sse() instanceof ServerSideEncryption.CustomerKey) {
+          ssec = (ServerSideEncryption.CustomerKey) args.sse();
         }
         StatObjectResponse stat =
             client.statObject(
@@ -1381,11 +1359,11 @@ public class FunctionalTest {
 
   public static void removeObjects(String bucketName, List<ObjectWriteResponse> results)
       throws Exception {
-    List<DeleteObject> objects =
+    List<DeleteRequest.Object> objects =
         results.stream()
             .map(
                 result -> {
-                  return new DeleteObject(result.object(), result.versionId());
+                  return new DeleteRequest.Object(result.object(), result.versionId());
                 })
             .collect(Collectors.toList());
     for (Result<?> r :
@@ -1625,7 +1603,7 @@ public class FunctionalTest {
         testTags = "[GET]";
         testGetPresignedUrl(
             GetPresignedObjectUrlArgs.builder()
-                .method(Method.GET)
+                .method(Http.Method.GET)
                 .bucket(bucketName)
                 .object(objectName)
                 .build(),
@@ -1634,7 +1612,7 @@ public class FunctionalTest {
         testTags = "[GET, expiry]";
         testGetPresignedUrl(
             GetPresignedObjectUrlArgs.builder()
-                .method(Method.GET)
+                .method(Http.Method.GET)
                 .bucket(bucketName)
                 .object(objectName)
                 .expiry(1, TimeUnit.DAYS)
@@ -1646,7 +1624,7 @@ public class FunctionalTest {
         queryParams.put("response-content-type", "application/json");
         testGetPresignedUrl(
             GetPresignedObjectUrlArgs.builder()
-                .method(Method.GET)
+                .method(Http.Method.GET)
                 .bucket(bucketName)
                 .object(objectName)
                 .expiry(1, TimeUnit.DAYS)
@@ -1702,7 +1680,7 @@ public class FunctionalTest {
         data,
         expectedChecksum,
         GetPresignedObjectUrlArgs.builder()
-            .method(Method.PUT)
+            .method(Http.Method.PUT)
             .bucket(bucketName)
             .object(objectName)
             .build());
@@ -1712,7 +1690,7 @@ public class FunctionalTest {
         data,
         expectedChecksum,
         GetPresignedObjectUrlArgs.builder()
-            .method(Method.PUT)
+            .method(Http.Method.PUT)
             .bucket(bucketName)
             .object(objectName)
             .expiry(1, TimeUnit.DAYS)
@@ -1760,7 +1738,7 @@ public class FunctionalTest {
       String urlString =
           client.getPresignedObjectUrl(
               GetPresignedObjectUrlArgs.builder()
-                  .method(Method.GET)
+                  .method(Http.Method.GET)
                   .bucket(bucketName)
                   .object("x")
                   .build());
@@ -1815,9 +1793,9 @@ public class FunctionalTest {
         } else {
           client.copyObject(args);
 
-          ServerSideEncryptionCustomerKey ssec = null;
-          if (sse instanceof ServerSideEncryptionCustomerKey) {
-            ssec = (ServerSideEncryptionCustomerKey) sse;
+          ServerSideEncryption.CustomerKey ssec = null;
+          if (sse instanceof ServerSideEncryption.CustomerKey) {
+            ssec = (ServerSideEncryption.CustomerKey) sse;
           }
           client.statObject(
               StatObjectArgs.builder()
@@ -2464,7 +2442,8 @@ public class FunctionalTest {
       client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).objectLock(true).build());
       try {
         ObjectLockConfiguration config =
-            new ObjectLockConfiguration(RetentionMode.COMPLIANCE, new RetentionDurationDays(10));
+            new ObjectLockConfiguration(
+                RetentionMode.COMPLIANCE, new ObjectLockConfiguration.RetentionDurationDays(10));
         client.setObjectLockConfiguration(
             SetObjectLockConfigurationArgs.builder().bucket(bucketName).config(config).build());
       } finally {
@@ -2477,7 +2456,8 @@ public class FunctionalTest {
   }
 
   public static void testGetObjectLockConfiguration(
-      String bucketName, RetentionMode mode, RetentionDuration duration) throws Exception {
+      String bucketName, RetentionMode mode, ObjectLockConfiguration.RetentionDuration duration)
+      throws Exception {
     ObjectLockConfiguration expectedConfig = new ObjectLockConfiguration(mode, duration);
     client.setObjectLockConfiguration(
         SetObjectLockConfigurationArgs.builder().bucket(bucketName).config(expectedConfig).build());
@@ -2506,9 +2486,13 @@ public class FunctionalTest {
       client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).objectLock(true).build());
       try {
         testGetObjectLockConfiguration(
-            bucketName, RetentionMode.COMPLIANCE, new RetentionDurationDays(10));
+            bucketName,
+            RetentionMode.COMPLIANCE,
+            new ObjectLockConfiguration.RetentionDurationDays(10));
         testGetObjectLockConfiguration(
-            bucketName, RetentionMode.GOVERNANCE, new RetentionDurationYears(1));
+            bucketName,
+            RetentionMode.GOVERNANCE,
+            new ObjectLockConfiguration.RetentionDurationYears(1));
       } finally {
         client.removeBucket(RemoveBucketArgs.builder().bucket(bucketName).build());
       }
@@ -2533,7 +2517,8 @@ public class FunctionalTest {
         client.deleteObjectLockConfiguration(
             DeleteObjectLockConfigurationArgs.builder().bucket(bucketName).build());
         ObjectLockConfiguration config =
-            new ObjectLockConfiguration(RetentionMode.COMPLIANCE, new RetentionDurationDays(10));
+            new ObjectLockConfiguration(
+                RetentionMode.COMPLIANCE, new ObjectLockConfiguration.RetentionDurationDays(10));
         client.setObjectLockConfiguration(
             SetObjectLockConfigurationArgs.builder().bucket(bucketName).config(config).build());
         client.deleteObjectLockConfiguration(
@@ -2787,7 +2772,7 @@ public class FunctionalTest {
     }
   }
 
-  public static void testSetBucketLifecycle(String bucketName, LifecycleRule... rules)
+  public static void testSetBucketLifecycle(String bucketName, LifecycleConfiguration.Rule... rules)
       throws Exception {
     LifecycleConfiguration config = new LifecycleConfiguration(Arrays.asList(rules));
     client.setBucketLifecycle(
@@ -2807,11 +2792,11 @@ public class FunctionalTest {
       try {
         testSetBucketLifecycle(
             bucketName,
-            new LifecycleRule(
+            new LifecycleConfiguration.Rule(
                 Status.ENABLED,
                 null,
-                new Expiration((ZonedDateTime) null, 365, null),
-                new RuleFilter("logs/"),
+                new LifecycleConfiguration.Expiration((ZonedDateTime) null, 365, null),
+                new Filter("logs/"),
                 "rule2",
                 null,
                 null,
@@ -2840,11 +2825,11 @@ public class FunctionalTest {
             DeleteBucketLifecycleArgs.builder().bucket(bucketName).build());
         testSetBucketLifecycle(
             bucketName,
-            new LifecycleRule(
+            new LifecycleConfiguration.Rule(
                 Status.ENABLED,
                 null,
-                new Expiration((ZonedDateTime) null, 365, null),
-                new RuleFilter("logs/"),
+                new LifecycleConfiguration.Expiration((ZonedDateTime) null, 365, null),
+                new Filter("logs/"),
                 "rule2",
                 null,
                 null,
@@ -2876,11 +2861,11 @@ public class FunctionalTest {
         Assert.assertNull("config: expected: <null>, got: <non-null>", config);
         testSetBucketLifecycle(
             bucketName,
-            new LifecycleRule(
+            new LifecycleConfiguration.Rule(
                 Status.ENABLED,
                 null,
-                new Expiration((ZonedDateTime) null, 365, null),
-                new RuleFilter("logs/"),
+                new LifecycleConfiguration.Expiration((ZonedDateTime) null, 365, null),
+                new Filter("logs/"),
                 "rule2",
                 null,
                 null,
@@ -2888,12 +2873,12 @@ public class FunctionalTest {
         config =
             client.getBucketLifecycle(GetBucketLifecycleArgs.builder().bucket(bucketName).build());
         Assert.assertNotNull("config: expected: <non-null>, got: <null>", config);
-        List<LifecycleRule> rules = config.rules();
+        List<LifecycleConfiguration.Rule> rules = config.rules();
         Assert.assertEquals(
             "config.rules().size(): expected: 1, got: " + config.rules().size(),
             1,
             config.rules().size());
-        LifecycleRule rule = rules.get(0);
+        LifecycleConfiguration.Rule rule = rules.get(0);
         Assert.assertEquals(
             "rule.status(): expected: " + Status.ENABLED + ", got: " + rule.status(),
             rule.status(),
@@ -2913,11 +2898,11 @@ public class FunctionalTest {
 
         testSetBucketLifecycle(
             bucketName,
-            new LifecycleRule(
+            new LifecycleConfiguration.Rule(
                 Status.ENABLED,
                 null,
-                new Expiration((ZonedDateTime) null, 365, null),
-                new RuleFilter(""),
+                new LifecycleConfiguration.Expiration((ZonedDateTime) null, 365, null),
+                new Filter(""),
                 null,
                 null,
                 null,
@@ -2961,21 +2946,23 @@ public class FunctionalTest {
       String bucketName = getRandomName();
       client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).region(region).build());
       try {
-        List<EventType> eventList = new LinkedList<>();
-        eventList.add(EventType.OBJECT_CREATED_PUT);
-        eventList.add(EventType.OBJECT_CREATED_COPY);
-        QueueConfiguration queueConfig = new QueueConfiguration();
-        queueConfig.setQueue(sqsArn);
-        queueConfig.setEvents(eventList);
-        queueConfig.setPrefixRule("images");
-        queueConfig.setSuffixRule("pg");
-
-        List<QueueConfiguration> queueConfigList = new LinkedList<>();
-        queueConfigList.add(queueConfig);
-
-        NotificationConfiguration config = new NotificationConfiguration();
-        config.setQueueConfigurationList(queueConfigList);
-
+        NotificationConfiguration config =
+            new NotificationConfiguration(
+                null,
+                Arrays.asList(
+                    new NotificationConfiguration.QueueConfiguration[] {
+                      new NotificationConfiguration.QueueConfiguration(
+                          sqsArn,
+                          null,
+                          Arrays.asList(
+                              new String[] {
+                                EventType.OBJECT_CREATED_PUT.toString(),
+                                EventType.OBJECT_CREATED_COPY.toString()
+                              }),
+                          new NotificationConfiguration.Filter("images", "pg"))
+                    }),
+                null,
+                null);
         client.setBucketNotification(
             SetBucketNotificationArgs.builder().bucket(bucketName).config(config).build());
       } finally {
@@ -3003,18 +2990,19 @@ public class FunctionalTest {
       String bucketName = getRandomName();
       client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).region(region).build());
       try {
-        List<EventType> eventList = new LinkedList<>();
-        eventList.add(EventType.OBJECT_CREATED_PUT);
-        QueueConfiguration queueConfig = new QueueConfiguration();
-        queueConfig.setQueue(sqsArn);
-        queueConfig.setEvents(eventList);
-
-        List<QueueConfiguration> queueConfigList = new LinkedList<>();
-        queueConfigList.add(queueConfig);
-
-        NotificationConfiguration expectedConfig = new NotificationConfiguration();
-        expectedConfig.setQueueConfigurationList(queueConfigList);
-
+        NotificationConfiguration expectedConfig =
+            new NotificationConfiguration(
+                null,
+                Arrays.asList(
+                    new NotificationConfiguration.QueueConfiguration[] {
+                      new NotificationConfiguration.QueueConfiguration(
+                          sqsArn,
+                          null,
+                          Arrays.asList(new String[] {EventType.OBJECT_CREATED_PUT.toString()}),
+                          new NotificationConfiguration.Filter("images", "pg"))
+                    }),
+                null,
+                null);
         client.setBucketNotification(
             SetBucketNotificationArgs.builder().bucket(bucketName).config(expectedConfig).build());
 
@@ -3022,11 +3010,12 @@ public class FunctionalTest {
             client.getBucketNotification(
                 GetBucketNotificationArgs.builder().bucket(bucketName).build());
 
-        if (config.queueConfigurationList().size() != 1
-            || !sqsArn.equals(config.queueConfigurationList().get(0).queue())
-            || config.queueConfigurationList().get(0).events().size() != 1
-            || config.queueConfigurationList().get(0).events().get(0)
-                != EventType.OBJECT_CREATED_PUT) {
+        if (config.queueConfigurations().size() != 1
+            || !sqsArn.equals(config.queueConfigurations().get(0).queue())
+            || config.queueConfigurations().get(0).events().size() != 1
+            || !EventType.OBJECT_CREATED_PUT
+                .toString()
+                .equals(config.queueConfigurations().get(0).events().get(0))) {
           System.out.println(
               "config: expected: " + Xml.marshal(expectedConfig) + ", got: " + Xml.marshal(config));
         }
@@ -3055,21 +3044,23 @@ public class FunctionalTest {
       String bucketName = getRandomName();
       client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).region(region).build());
       try {
-        List<EventType> eventList = new LinkedList<>();
-        eventList.add(EventType.OBJECT_CREATED_PUT);
-        eventList.add(EventType.OBJECT_CREATED_COPY);
-        QueueConfiguration queueConfig = new QueueConfiguration();
-        queueConfig.setQueue(sqsArn);
-        queueConfig.setEvents(eventList);
-        queueConfig.setPrefixRule("images");
-        queueConfig.setSuffixRule("pg");
-
-        List<QueueConfiguration> queueConfigList = new LinkedList<>();
-        queueConfigList.add(queueConfig);
-
-        NotificationConfiguration config = new NotificationConfiguration();
-        config.setQueueConfigurationList(queueConfigList);
-
+        NotificationConfiguration config =
+            new NotificationConfiguration(
+                null,
+                Arrays.asList(
+                    new NotificationConfiguration.QueueConfiguration[] {
+                      new NotificationConfiguration.QueueConfiguration(
+                          sqsArn,
+                          null,
+                          Arrays.asList(
+                              new String[] {
+                                EventType.OBJECT_CREATED_PUT.toString(),
+                                EventType.OBJECT_CREATED_COPY.toString()
+                              }),
+                          new NotificationConfiguration.Filter("images", "pg"))
+                    }),
+                null,
+                null);
         client.setBucketNotification(
             SetBucketNotificationArgs.builder().bucket(bucketName).config(config).build());
 
@@ -3079,7 +3070,7 @@ public class FunctionalTest {
         config =
             client.getBucketNotification(
                 GetBucketNotificationArgs.builder().bucket(bucketName).build());
-        if (config.queueConfigurationList().size() != 0) {
+        if (config.queueConfigurations().size() != 0) {
           System.out.println("config: expected: <empty>, got: " + Xml.marshal(config));
         }
       } finally {
@@ -3128,8 +3119,8 @@ public class FunctionalTest {
         }
 
         boolean found = false;
-        for (Event event : records.events()) {
-          if (event.objectName().equals("prefix-random-suffix")) {
+        for (NotificationRecords.Event event : records.events()) {
+          if ("prefix-random-suffix".equals(event.object().key())) {
             found = true;
             break;
           }
@@ -3183,9 +3174,11 @@ public class FunctionalTest {
               .build());
 
       InputSerialization is =
-          new InputSerialization(null, false, null, null, FileHeaderInfo.USE, null, null, null);
+          InputSerialization.newCSV(
+              null, false, null, null, InputSerialization.FileHeaderInfo.USE, null, null, null);
       OutputSerialization os =
-          new OutputSerialization(null, null, null, QuoteFields.ASNEEDED, null);
+          OutputSerialization.newCSV(
+              null, null, null, OutputSerialization.QuoteFields.ASNEEDED, null);
 
       responseStream =
           client.selectObjectContent(
@@ -3206,18 +3199,15 @@ public class FunctionalTest {
 
       Stats stats = responseStream.stats();
       Assert.assertNotNull("stats is null", stats);
-      Assert.assertEquals(
+      Assert.assertTrue(
           "stats.bytesScanned mismatch; expected: 258, got: " + stats.bytesScanned(),
-          stats.bytesScanned(),
-          256);
-      Assert.assertEquals(
+          stats.bytesScanned() == 256);
+      Assert.assertTrue(
           "stats.bytesProcessed mismatch; expected: 258, got: " + stats.bytesProcessed(),
-          stats.bytesProcessed(),
-          256);
-      Assert.assertEquals(
+          stats.bytesProcessed() == 256);
+      Assert.assertTrue(
           "stats.bytesReturned mismatch; expected: 222, got: " + stats.bytesReturned(),
-          stats.bytesReturned(),
-          222);
+          stats.bytesReturned() == 222);
       mintSuccessLog(methodName, testArgs, startTime);
     } catch (Exception e) {
       handleException(methodName, testArgs, startTime, e);
@@ -3600,18 +3590,18 @@ public class FunctionalTest {
                 GetObjectAclArgs.builder().bucket(bucketName).object(objectName).build());
         Assert.assertEquals(
             "granteeType: expected: "
-                + GranteeType.CANONICAL_USER
+                + AccessControlList.Type.CANONICAL_USER
                 + ", got: "
                 + policy.accessControlList().grants().get(0).grantee().type(),
             policy.accessControlList().grants().get(0).grantee().type(),
-            GranteeType.CANONICAL_USER);
+            AccessControlList.Type.CANONICAL_USER);
         Assert.assertEquals(
             "permission: expected: "
-                + Permission.FULL_CONTROL
+                + AccessControlList.Permission.FULL_CONTROL
                 + ", got: "
                 + policy.accessControlList().grants().get(0).permission(),
             policy.accessControlList().grants().get(0).permission(),
-            Permission.FULL_CONTROL);
+            AccessControlList.Permission.FULL_CONTROL);
         mintSuccessLog(methodName, null, startTime);
       } finally {
         client.removeObject(
@@ -3686,19 +3676,20 @@ public class FunctionalTest {
       tags.put("key1", "value1");
       tags.put("key2", "value2");
 
-      ReplicationRule rule =
-          new ReplicationRule(
-              new DeleteMarkerReplication(Status.DISABLED),
-              new ReplicationDestination(null, null, replicationBucketArn, null, null, null, null),
+      ReplicationConfiguration.Rule rule =
+          new ReplicationConfiguration.Rule(
+              new ReplicationConfiguration.DeleteMarkerReplication(Status.DISABLED),
+              new ReplicationConfiguration.Destination(
+                  null, null, replicationBucketArn, null, null, null, null),
               null,
-              new RuleFilter(new AndOperator("TaxDocs", tags)),
+              new Filter(new Filter.And("TaxDocs", tags)),
               "rule1",
               null,
               1,
               null,
               Status.ENABLED);
 
-      List<ReplicationRule> rules = new LinkedList<>();
+      List<ReplicationConfiguration.Rule> rules = new LinkedList<>();
       rules.add(rule);
 
       ReplicationConfiguration config = new ReplicationConfiguration(replicationRole, rules);
@@ -3735,19 +3726,20 @@ public class FunctionalTest {
       tags.put("key1", "value1");
       tags.put("key2", "value2");
 
-      ReplicationRule rule =
-          new ReplicationRule(
-              new DeleteMarkerReplication(Status.DISABLED),
-              new ReplicationDestination(null, null, replicationBucketArn, null, null, null, null),
+      ReplicationConfiguration.Rule rule =
+          new ReplicationConfiguration.Rule(
+              new ReplicationConfiguration.DeleteMarkerReplication(Status.DISABLED),
+              new ReplicationConfiguration.Destination(
+                  null, null, replicationBucketArn, null, null, null, null),
               null,
-              new RuleFilter(new AndOperator("TaxDocs", tags)),
+              new Filter(new Filter.And("TaxDocs", tags)),
               "rule1",
               null,
               1,
               null,
               Status.ENABLED);
 
-      List<ReplicationRule> rules = new LinkedList<>();
+      List<ReplicationConfiguration.Rule> rules = new LinkedList<>();
       rules.add(rule);
 
       config = new ReplicationConfiguration(replicationRole, rules);
@@ -3785,19 +3777,20 @@ public class FunctionalTest {
       tags.put("key1", "value1");
       tags.put("key2", "value2");
 
-      ReplicationRule rule =
-          new ReplicationRule(
-              new DeleteMarkerReplication(Status.DISABLED),
-              new ReplicationDestination(null, null, replicationBucketArn, null, null, null, null),
+      ReplicationConfiguration.Rule rule =
+          new ReplicationConfiguration.Rule(
+              new ReplicationConfiguration.DeleteMarkerReplication(Status.DISABLED),
+              new ReplicationConfiguration.Destination(
+                  null, null, replicationBucketArn, null, null, null, null),
               null,
-              new RuleFilter(new AndOperator("TaxDocs", tags)),
+              new Filter(new Filter.And("TaxDocs", tags)),
               "rule1",
               null,
               1,
               null,
               Status.ENABLED);
 
-      List<ReplicationRule> rules = new LinkedList<>();
+      List<ReplicationConfiguration.Rule> rules = new LinkedList<>();
       rules.add(rule);
 
       ReplicationConfiguration config = new ReplicationConfiguration(replicationRole, rules);
@@ -4224,7 +4217,7 @@ public class FunctionalTest {
     if (kmsKeyName != null) {
       Map<String, String> myContext = new HashMap<>();
       myContext.put("key1", "value1");
-      sseKms = new ServerSideEncryptionKms(kmsKeyName, myContext);
+      sseKms = new ServerSideEncryption.KMS(kmsKeyName, myContext);
     }
 
     int exitValue = 0;

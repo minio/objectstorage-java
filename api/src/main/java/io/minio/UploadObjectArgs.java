@@ -58,7 +58,7 @@ public class UploadObjectArgs extends PutObjectBaseArgs {
     }
 
     private void validateFilename(String filename) {
-      validateNotEmptyString(filename, "filename");
+      Utils.validateNotEmptyString(filename, "filename");
       if (!Files.isRegularFile(Paths.get(filename))) {
         throw new IllegalArgumentException(filename + " not a regular file");
       }

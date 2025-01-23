@@ -26,25 +26,79 @@ import org.simpleframework.xml.Root;
 @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_FIELD")
 public class OutputSerialization {
   @Element(name = "CSV", required = false)
-  private CsvOutputSerialization csv;
+  private CSV csv;
 
   @Element(name = "JSON", required = false)
-  private JsonOutputSerialization json;
+  private JSON json;
+
+  private OutputSerialization(CSV csv, JSON json) {
+    this.csv = csv;
+    this.json = json;
+  }
 
   /** Constructs a new OutputSerialization object with CSV. */
-  public OutputSerialization(
+  public static OutputSerialization newCSV(
       Character fieldDelimiter,
       Character quoteCharacter,
       Character quoteEscapeCharacter,
       QuoteFields quoteFields,
       Character recordDelimiter) {
-    this.csv =
-        new CsvOutputSerialization(
-            fieldDelimiter, quoteCharacter, quoteEscapeCharacter, quoteFields, recordDelimiter);
+    return new OutputSerialization(
+        new CSV(fieldDelimiter, quoteCharacter, quoteEscapeCharacter, quoteFields, recordDelimiter),
+        null);
   }
 
   /** Constructs a new OutputSerialization object with JSON. */
-  public OutputSerialization(Character recordDelimiter) {
-    this.json = new JsonOutputSerialization(recordDelimiter);
+  public static OutputSerialization newJSON(Character recordDelimiter) {
+    return new OutputSerialization(null, new JSON(recordDelimiter));
+  }
+
+  @Root(name = "CSV")
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_FIELD")
+  public static class CSV {
+    @Element(name = "FieldDelimiter", required = false)
+    private Character fieldDelimiter;
+
+    @Element(name = "QuoteCharacter", required = false)
+    private Character quoteCharacter;
+
+    @Element(name = "QuoteEscapeCharacter", required = false)
+    private Character quoteEscapeCharacter;
+
+    @Element(name = "QuoteFields", required = false)
+    private QuoteFields quoteFields;
+
+    @Element(name = "RecordDelimiter", required = false)
+    private Character recordDelimiter;
+
+    public CSV(
+        Character fieldDelimiter,
+        Character quoteCharacter,
+        Character quoteEscapeCharacter,
+        QuoteFields quoteFields,
+        Character recordDelimiter) {
+      this.fieldDelimiter = fieldDelimiter;
+      this.quoteCharacter = quoteCharacter;
+      this.quoteEscapeCharacter = quoteEscapeCharacter;
+      this.quoteFields = quoteFields;
+      this.recordDelimiter = recordDelimiter;
+    }
+  }
+
+  @Root(name = "JSON")
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_FIELD")
+  public static class JSON {
+    @Element(name = "RecordDelimiter", required = false)
+    private Character recordDelimiter;
+
+    public JSON(Character recordDelimiter) {
+      this.recordDelimiter = recordDelimiter;
+    }
+  }
+
+  /** Indicates whether to use quotation marks around output fields. */
+  public static enum QuoteFields {
+    ALWAYS,
+    ASNEEDED;
   }
 }

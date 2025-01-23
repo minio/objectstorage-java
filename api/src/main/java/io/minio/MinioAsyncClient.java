@@ -32,15 +32,12 @@ import io.minio.errors.InternalException;
 import io.minio.errors.InvalidResponseException;
 import io.minio.errors.ServerException;
 import io.minio.errors.XmlParserException;
-import io.minio.http.HttpUtils;
-import io.minio.http.Method;
 import io.minio.messages.AccessControlPolicy;
-import io.minio.messages.Bucket;
 import io.minio.messages.CORSConfiguration;
 import io.minio.messages.CopyObjectResult;
 import io.minio.messages.CreateBucketConfiguration;
-import io.minio.messages.DeleteError;
-import io.minio.messages.DeleteObject;
+import io.minio.messages.DeleteRequest;
+import io.minio.messages.DeleteResult;
 import io.minio.messages.GetObjectAttributesOutput;
 import io.minio.messages.Item;
 import io.minio.messages.LegalHold;
@@ -252,7 +249,7 @@ public class MinioAsyncClient extends S3Base {
     return executeGetAsync(
             args,
             args.getHeaders(),
-            (args.versionId() != null) ? newMultimap("versionId", args.versionId()) : null)
+            (args.versionId() != null) ? Utils.newMultimap("versionId", args.versionId()) : null)
         .thenApply(
             response -> {
               return new GetObjectResponse(
@@ -274,7 +271,7 @@ public class MinioAsyncClient extends S3Base {
     try {
       Path filePath = Paths.get(filename);
       String tempFilename =
-          filename + "." + S3Escaper.encode(statObjectResponse.etag()) + ".part.minio";
+          filename + "." + Utils.encode(statObjectResponse.etag()) + ".part.minio";
       Path tempFilePath = Paths.get(tempFilename);
       if (Files.exists(tempFilePath)) Files.delete(tempFilePath);
       os = Files.newOutputStream(tempFilePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -674,7 +671,8 @@ public class MinioAsyncClient extends S3Base {
               CompletableFuture<ObjectWriteResponse> completableFuture =
                   CompletableFuture.supplyAsync(
                           () -> {
-                            Multimap<String, String> headers = newMultimap(args.extraHeaders());
+                            Multimap<String, String> headers =
+                                Utils.newMultimap(args.extraHeaders());
                             headers.putAll(args.genHeaders());
                             return headers;
                           })
@@ -706,8 +704,8 @@ public class MinioAsyncClient extends S3Base {
                           uploadId -> {
                             Multimap<String, String> ssecHeaders = HashMultimap.create();
                             if (args.sse() != null
-                                && args.sse() instanceof ServerSideEncryptionCustomerKey) {
-                              ssecHeaders.putAll(newMultimap(args.sse().headers()));
+                                && args.sse() instanceof ServerSideEncryption.CustomerKey) {
+                              ssecHeaders.putAll(Utils.newMultimap(args.sse().headers()));
                             }
 
                             int partNumber = 0;
@@ -733,7 +731,7 @@ public class MinioAsyncClient extends S3Base {
 
                               final Multimap<String, String> headers;
                               try {
-                                headers = newMultimap(src.headers());
+                                headers = Utils.newMultimap(src.headers());
                               } catch (InternalException e) {
                                 throw new CompletionException(e);
                               }
@@ -785,7 +783,7 @@ public class MinioAsyncClient extends S3Base {
                                 }
                                 long endBytes = offset + length - 1;
 
-                                Multimap<String, String> headersCopy = newMultimap(headers);
+                                Multimap<String, String> headersCopy = Utils.newMultimap(headers);
                                 headersCopy.put(
                                     "x-amz-copy-source-range", "bytes=" + offset + "-" + endBytes);
 
@@ -877,7 +875,7 @@ public class MinioAsyncClient extends S3Base {
    * String url =
    *    minioAsyncClient.getPresignedObjectUrl(
    *        GetPresignedObjectUrlArgs.builder()
-   *            .method(Method.DELETE)
+   *            .method(Http.Method.DELETE)
    *            .bucket("my-bucketname")
    *            .object("my-objectname")
    *            .expiry(24 * 60 * 60)
@@ -892,7 +890,7 @@ public class MinioAsyncClient extends S3Base {
    * String url =
    *    minioAsyncClient.getPresignedObjectUrl(
    *        GetPresignedObjectUrlArgs.builder()
-   *            .method(Method.PUT)
+   *            .method(Http.Method.PUT)
    *            .bucket("my-bucketname")
    *            .object("my-objectname")
    *            .expiry(1, TimeUnit.DAYS)
@@ -905,7 +903,7 @@ public class MinioAsyncClient extends S3Base {
    * String url =
    *    minioAsyncClient.getPresignedObjectUrl(
    *        GetPresignedObjectUrlArgs.builder()
-   *            .method(Method.GET)
+   *            .method(Http.Method.GET)
    *            .bucket("my-bucketname")
    *            .object("my-objectname")
    *            .expiry(2, TimeUnit.HOURS)
@@ -933,9 +931,11 @@ public class MinioAsyncClient extends S3Base {
     checkArgs(args);
 
     byte[] body =
-        (args.method() == Method.PUT || args.method() == Method.POST) ? HttpUtils.EMPTY_BODY : null;
+        (args.method() == Http.Method.PUT || args.method() == Http.Method.POST)
+            ? Utils.EMPTY_BODY
+            : null;
 
-    Multimap<String, String> queryParams = newMultimap(args.extraQueryParams());
+    Multimap<String, String> queryParams = Utils.newMultimap(args.extraQueryParams());
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
 
     String region = null;
@@ -959,7 +959,7 @@ public class MinioAsyncClient extends S3Base {
         createRequest(
             url,
             args.method(),
-            args.extraHeaders() == null ? null : httpHeaders(args.extraHeaders()),
+            args.extraHeaders() == null ? null : Utils.httpHeaders(args.extraHeaders()),
             body,
             0,
             creds);
@@ -1090,9 +1090,9 @@ public class MinioAsyncClient extends S3Base {
     return executeDeleteAsync(
             args,
             args.bypassGovernanceMode()
-                ? newMultimap("x-amz-bypass-governance-retention", "true")
+                ? Utils.newMultimap("x-amz-bypass-governance-retention", "true")
                 : null,
-            (args.versionId() != null) ? newMultimap("versionId", args.versionId()) : null)
+            (args.versionId() != null) ? Utils.newMultimap("versionId", args.versionId()) : null)
         .thenAccept(response -> response.close());
   }
 
@@ -1105,35 +1105,36 @@ public class MinioAsyncClient extends S3Base {
    * objects.add(new DeleteObject("my-objectname1"));
    * objects.add(new DeleteObject("my-objectname2"));
    * objects.add(new DeleteObject("my-objectname3"));
-   * Iterable<Result<DeleteError>> results =
+   * Iterable<Result<DeleteResult.Error>> results =
    *     minioAsyncClient.removeObjects(
    *         RemoveObjectsArgs.builder().bucket("my-bucketname").objects(objects).build());
-   * for (Result<DeleteError> result : results) {
-   *   DeleteError error = result.get();
+   * for (Result<DeleteResult.Error> result : results) {
+   *   DeleteResult.Error error = result.get();
    *   System.out.println(
    *       "Error in deleting object " + error.objectName() + "; " + error.message());
    * }
    * }</pre>
    *
    * @param args {@link RemoveObjectsArgs} object.
-   * @return {@code Iterable<Result<DeleteError>>} - Lazy iterator contains object removal status.
+   * @return {@code Iterable<Result<DeleteResult.Error>>} - Lazy iterator contains object removal
+   *     status.
    */
-  public Iterable<Result<DeleteError>> removeObjects(RemoveObjectsArgs args) {
+  public Iterable<Result<DeleteResult.Error>> removeObjects(RemoveObjectsArgs args) {
     checkArgs(args);
 
-    return new Iterable<Result<DeleteError>>() {
+    return new Iterable<Result<DeleteResult.Error>>() {
       @Override
-      public Iterator<Result<DeleteError>> iterator() {
-        return new Iterator<Result<DeleteError>>() {
-          private Result<DeleteError> error = null;
-          private Iterator<DeleteError> errorIterator = null;
+      public Iterator<Result<DeleteResult.Error>> iterator() {
+        return new Iterator<Result<DeleteResult.Error>>() {
+          private Result<DeleteResult.Error> error = null;
+          private Iterator<DeleteResult.Error> errorIterator = null;
           private boolean completed = false;
-          private Iterator<DeleteObject> objectIter = args.objects().iterator();
+          private Iterator<DeleteRequest.Object> objectIter = args.objects().iterator();
 
           private void setError() {
             error = null;
             while (errorIterator.hasNext()) {
-              DeleteError deleteError = errorIterator.next();
+              DeleteResult.Error deleteError = errorIterator.next();
               if (!"NoSuchVersion".equals(deleteError.code())) {
                 error = new Result<>(deleteError);
                 break;
@@ -1147,7 +1148,7 @@ public class MinioAsyncClient extends S3Base {
             }
 
             try {
-              List<DeleteObject> objectList = new LinkedList<>();
+              List<DeleteRequest.Object> objectList = new LinkedList<>();
               while (objectIter.hasNext() && objectList.size() < 1000) {
                 objectList.add(objectIter.next());
               }
@@ -1171,8 +1172,8 @@ public class MinioAsyncClient extends S3Base {
               } catch (ExecutionException e) {
                 throwEncapsulatedException(e);
               }
-              if (!response.result().errorList().isEmpty()) {
-                errorIterator = response.result().errorList().iterator();
+              if (!response.result().errors().isEmpty()) {
+                errorIterator = response.result().errors().iterator();
                 setError();
                 completed = true;
               }
@@ -1205,11 +1206,11 @@ public class MinioAsyncClient extends S3Base {
           }
 
           @Override
-          public Result<DeleteError> next() {
+          public Result<DeleteResult.Error> next() {
             if (!hasNext()) throw new NoSuchElementException();
 
             if (this.error != null) {
-              Result<DeleteError> error = this.error;
+              Result<DeleteResult.Error> error = this.error;
               this.error = null;
               return error;
             }
@@ -1262,7 +1263,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePostAsync(args, null, newMultimap("restore", ""), args.request())
+    return executePostAsync(args, null, Utils.newMultimap("restore", ""), args.request())
         .thenAccept(response -> response.close());
   }
 
@@ -1325,10 +1326,11 @@ public class MinioAsyncClient extends S3Base {
    * Lists bucket information of all buckets.
    *
    * <pre>Example:{@code
-   * CompletableFuture<List<Bucket>> future = minioAsyncClient.listBuckets();
+   * CompletableFuture<List<ListAllMyBucketsResult.Bucket>> future = minioAsyncClient.listBuckets();
    * }</pre>
    *
-   * @return {@link CompletableFuture}&lt;{@link List}&lt;{@link Bucket}&gt;&gt; object.
+   * @return {@link CompletableFuture}&lt;{@link List}&lt;{@link
+   *     ListAllMyBucketsResult.Bucket}&gt;&gt; object.
    * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
    * @throws InternalException thrown to indicate internal library error.
    * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
@@ -1336,7 +1338,7 @@ public class MinioAsyncClient extends S3Base {
    * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
    * @throws XmlParserException thrown to indicate XML parsing error.
    */
-  public CompletableFuture<List<Bucket>> listBuckets()
+  public CompletableFuture<List<ListAllMyBucketsResult.Bucket>> listBuckets()
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     return listBucketsAsync(null, null, null, null, null, null)
@@ -1350,30 +1352,31 @@ public class MinioAsyncClient extends S3Base {
    * Lists bucket information of all buckets.
    *
    * <pre>Example:{@code
-   * Iterable<Result<Bucket>> results = minioAsyncClient.listBuckets(ListBucketsArgs.builder().build());
-   * for (Result<Bucket> result : results) {
+   * Iterable<Result<ListAllMyBucketsResult.Bucket>> results = minioAsyncClient.listBuckets(ListBucketsArgs.builder().build());
+   * for (Result<ListAllMyBucketsResult.Bucket> result : results) {
    *   Bucket bucket = result.get();
    *   System.out.println(String.format("Bucket: %s, Region: %s, CreationDate: %s", bucket.name(), bucket.bucketRegion(), bucket.creationDate()));
    * }
    * }</pre>
    *
-   * @return {@link Iterable}&lt;{@link List}&lt;{@link Bucket}&gt;&gt; object.
+   * @return {@link Iterable}&lt;{@link List}&lt;{@link ListAllMyBucketsResult.Bucket}&gt;&gt;
+   *     object.
    */
-  public Iterable<Result<Bucket>> listBuckets(ListBucketsArgs args) {
-    return new Iterable<Result<Bucket>>() {
+  public Iterable<Result<ListAllMyBucketsResult.Bucket>> listBuckets(ListBucketsArgs args) {
+    return new Iterable<Result<ListAllMyBucketsResult.Bucket>>() {
       @Override
-      public Iterator<Result<Bucket>> iterator() {
-        return new Iterator<Result<Bucket>>() {
+      public Iterator<Result<ListAllMyBucketsResult.Bucket>> iterator() {
+        return new Iterator<Result<ListAllMyBucketsResult.Bucket>>() {
           private ListAllMyBucketsResult result = null;
-          private Result<Bucket> error = null;
-          private Iterator<Bucket> iterator = null;
+          private Result<ListAllMyBucketsResult.Bucket> error = null;
+          private Iterator<ListAllMyBucketsResult.Bucket> iterator = null;
           private boolean completed = false;
 
           private synchronized void populate() {
             if (completed) return;
 
             try {
-              this.iterator = new LinkedList<Bucket>().iterator();
+              this.iterator = new LinkedList<ListAllMyBucketsResult.Bucket>().iterator();
               try {
                 ListBucketsResponse response =
                     listBucketsAsync(
@@ -1430,7 +1433,7 @@ public class MinioAsyncClient extends S3Base {
           }
 
           @Override
-          public Result<Bucket> next() {
+          public Result<ListAllMyBucketsResult.Bucket> next() {
             if (this.completed) throw new NoSuchElementException();
             if (this.error == null && this.iterator == null) {
               populate();
@@ -1448,7 +1451,7 @@ public class MinioAsyncClient extends S3Base {
               return this.error;
             }
 
-            Bucket item = null;
+            ListAllMyBucketsResult.Bucket item = null;
             if (this.iterator.hasNext()) {
               item = this.iterator.next();
             }
@@ -1576,15 +1579,15 @@ public class MinioAsyncClient extends S3Base {
     }
 
     Multimap<String, String> headers =
-        args.objectLock() ? newMultimap("x-amz-bucket-object-lock-enabled", "true") : null;
+        args.objectLock() ? Utils.newMultimap("x-amz-bucket-object-lock-enabled", "true") : null;
     final String location = region;
 
     return executeAsync(
-            Method.PUT,
+            Http.Method.PUT,
             args.bucket(),
             null,
             location,
-            httpHeaders(merge(args.extraHeaders(), headers)),
+            Utils.httpHeaders(Utils.mergeMultimap(args.extraHeaders(), headers)),
             args.extraQueryParams(),
             location.equals(US_EAST_1) ? null : new CreateBucketConfiguration(location),
             0)
@@ -1616,7 +1619,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePutAsync(args, null, newMultimap("versioning", ""), args.config(), 0)
+    return executePutAsync(args, null, Utils.newMultimap("versioning", ""), args.config(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -1643,7 +1646,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("versioning", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("versioning", ""))
         .thenApply(
             response -> {
               try {
@@ -1679,7 +1682,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePutAsync(args, null, newMultimap("object-lock", ""), args.config(), 0)
+    return executePutAsync(args, null, Utils.newMultimap("object-lock", ""), args.config(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -1706,7 +1709,7 @@ public class MinioAsyncClient extends S3Base {
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
     return executePutAsync(
-            args, null, newMultimap("object-lock", ""), new ObjectLockConfiguration(), 0)
+            args, null, Utils.newMultimap("object-lock", ""), new ObjectLockConfiguration(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -1733,7 +1736,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("object-lock", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("object-lock", ""))
         .thenApply(
             response -> {
               try {
@@ -1774,12 +1777,12 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("retention", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("retention", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executePutAsync(
             args,
             args.bypassGovernanceMode()
-                ? newMultimap("x-amz-bypass-governance-retention", "True")
+                ? Utils.newMultimap("x-amz-bypass-governance-retention", "True")
                 : null,
             queryParams,
             args.config(),
@@ -1812,7 +1815,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("retention", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("retention", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executeGetAsync(args, null, queryParams)
         .exceptionally(
@@ -1875,7 +1878,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("legal-hold", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("legal-hold", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executePutAsync(args, null, queryParams, new LegalHold(true), 0)
         .thenAccept(response -> response.close());
@@ -1906,7 +1909,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("legal-hold", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("legal-hold", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executePutAsync(args, null, queryParams, new LegalHold(false), 0)
         .thenAccept(response -> response.close());
@@ -1938,7 +1941,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("legal-hold", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("legal-hold", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executeGetAsync(args, null, queryParams)
         .exceptionally(
@@ -2158,7 +2161,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("policy", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("policy", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -2264,8 +2267,8 @@ public class MinioAsyncClient extends S3Base {
     checkArgs(args);
     return executePutAsync(
             args,
-            newMultimap("Content-Type", "application/json"),
-            newMultimap("policy", ""),
+            Utils.newMultimap("Content-Type", "application/json"),
+            Utils.newMultimap("policy", ""),
             args.config(),
             0)
         .thenAccept(response -> response.close());
@@ -2293,7 +2296,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeDeleteAsync(args, null, newMultimap("policy", ""))
+    return executeDeleteAsync(args, null, Utils.newMultimap("policy", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -2355,7 +2358,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePutAsync(args, null, newMultimap("lifecycle", ""), args.config(), 0)
+    return executePutAsync(args, null, Utils.newMultimap("lifecycle", ""), args.config(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -2380,7 +2383,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeDeleteAsync(args, null, newMultimap("lifecycle", ""))
+    return executeDeleteAsync(args, null, Utils.newMultimap("lifecycle", ""))
         .thenAccept(response -> response.close());
   }
 
@@ -2407,7 +2410,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("lifecycle", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("lifecycle", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -2466,7 +2469,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("notification", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("notification", ""))
         .thenApply(
             response -> {
               try {
@@ -2516,7 +2519,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePutAsync(args, null, newMultimap("notification", ""), args.config(), 0)
+    return executePutAsync(args, null, Utils.newMultimap("notification", ""), args.config(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -2542,7 +2545,11 @@ public class MinioAsyncClient extends S3Base {
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
     return executePutAsync(
-            args, null, newMultimap("notification", ""), new NotificationConfiguration(), 0)
+            args,
+            null,
+            Utils.newMultimap("notification", ""),
+            new NotificationConfiguration(null, null, null, null),
+            0)
         .thenAccept(response -> response.close());
   }
 
@@ -2569,7 +2576,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("replication", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("replication", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -2652,9 +2659,9 @@ public class MinioAsyncClient extends S3Base {
     return executePutAsync(
             args,
             (args.objectLockToken() != null)
-                ? newMultimap("x-amz-bucket-object-lock-token", args.objectLockToken())
+                ? Utils.newMultimap("x-amz-bucket-object-lock-token", args.objectLockToken())
                 : null,
-            newMultimap("replication", ""),
+            Utils.newMultimap("replication", ""),
             args.config(),
             0)
         .thenAccept(response -> response.close());
@@ -2681,7 +2688,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeDeleteAsync(args, null, newMultimap("replication", ""))
+    return executeDeleteAsync(args, null, Utils.newMultimap("replication", ""))
         .thenAccept(response -> response.close());
   }
 
@@ -2732,7 +2739,7 @@ public class MinioAsyncClient extends S3Base {
     checkArgs(args);
 
     Multimap<String, String> queryParams =
-        newMultimap("prefix", args.prefix(), "suffix", args.suffix());
+        Utils.newMultimap("prefix", args.prefix(), "suffix", args.suffix());
     for (String event : args.events()) {
       queryParams.put("events", event);
     }
@@ -2805,8 +2812,8 @@ public class MinioAsyncClient extends S3Base {
       response =
           executePostAsync(
                   args,
-                  (args.ssec() != null) ? newMultimap(args.ssec().headers()) : null,
-                  newMultimap("select", "", "select-type", "2"),
+                  (args.ssec() != null) ? Utils.newMultimap(args.ssec().headers()) : null,
+                  Utils.newMultimap("select", "", "select-type", "2"),
                   new SelectObjectContentRequest(
                       args.sqlExpression(),
                       args.requestProgress(),
@@ -2844,7 +2851,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePutAsync(args, null, newMultimap("encryption", ""), args.config(), 0)
+    return executePutAsync(args, null, Utils.newMultimap("encryption", ""), args.config(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -2870,7 +2877,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("encryption", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("encryption", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -2927,7 +2934,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeDeleteAsync(args, null, newMultimap("encryption", ""))
+    return executeDeleteAsync(args, null, Utils.newMultimap("encryption", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -2977,7 +2984,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("tagging", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("tagging", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -3034,7 +3041,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePutAsync(args, null, newMultimap("tagging", ""), args.tags(), 0)
+    return executePutAsync(args, null, Utils.newMultimap("tagging", ""), args.tags(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -3059,7 +3066,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeDeleteAsync(args, null, newMultimap("tagging", ""))
+    return executeDeleteAsync(args, null, Utils.newMultimap("tagging", ""))
         .thenAccept(response -> response.close());
   }
 
@@ -3085,7 +3092,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("tagging", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("tagging", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executeGetAsync(args, null, queryParams)
         .thenApply(
@@ -3128,7 +3135,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("tagging", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("tagging", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executePutAsync(args, null, queryParams, args.tags(), 0)
         .thenAccept(response -> response.close());
@@ -3155,7 +3162,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("tagging", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("tagging", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executeDeleteAsync(args, null, queryParams).thenAccept(response -> response.close());
   }
@@ -3181,7 +3188,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeGetAsync(args, null, newMultimap("cors", ""))
+    return executeGetAsync(args, null, Utils.newMultimap("cors", ""))
         .exceptionally(
             e -> {
               Throwable ex = e.getCause();
@@ -3258,7 +3265,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executePutAsync(args, null, newMultimap("cors", ""), args.config(), 0)
+    return executePutAsync(args, null, Utils.newMultimap("cors", ""), args.config(), 0)
         .thenAccept(response -> response.close());
   }
 
@@ -3283,7 +3290,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    return executeDeleteAsync(args, null, newMultimap("cors", ""))
+    return executeDeleteAsync(args, null, Utils.newMultimap("cors", ""))
         .thenAccept(response -> response.close());
   }
 
@@ -3309,7 +3316,7 @@ public class MinioAsyncClient extends S3Base {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
-    Multimap<String, String> queryParams = newMultimap("acl", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("acl", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
     return executeGetAsync(args, null, queryParams)
         .thenApply(
@@ -3355,7 +3362,7 @@ public class MinioAsyncClient extends S3Base {
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
 
-    Multimap<String, String> queryParams = newMultimap("attributes", "");
+    Multimap<String, String> queryParams = Utils.newMultimap("attributes", "");
     if (args.versionId() != null) queryParams.put("versionId", args.versionId());
 
     Multimap<String, String> headers = HashMultimap.create();
@@ -3494,7 +3501,7 @@ public class MinioAsyncClient extends S3Base {
             })
         .thenCompose(
             baos -> {
-              Multimap<String, String> headers = newMultimap(args.extraHeaders());
+              Multimap<String, String> headers = Utils.newMultimap(args.extraHeaders());
               headers.putAll(args.genHeaders());
               headers.put("X-Amz-Meta-Snowball-Auto-Extract", "true");
 
@@ -3617,7 +3624,7 @@ public class MinioAsyncClient extends S3Base {
                 multipartBuilder.addFormDataPart(
                     "file",
                     "fanout-content",
-                    new HttpRequestBody(new PartSource(args.stream(), args.size()), null));
+                    new Http.RequestBody(args.stream(), args.size(), Http.DEFAULT_MEDIA_TYPE));
 
                 return multipartBuilder.build();
               } catch (JsonProcessingException e) {
@@ -3684,9 +3691,11 @@ public class MinioAsyncClient extends S3Base {
           NoSuchAlgorithmException, XmlParserException {
     checkArgs(args);
 
-    Multimap<String, String> queryParams = newMultimap("lambdaArn", args.lambdaArn());
+    Multimap<String, String> queryParams = Utils.newMultimap("lambdaArn", args.lambdaArn());
     Multimap<String, String> headers =
-        merge(newMultimap(args.headers()), newMultimap("Content-Type", "application/json"));
+        Utils.mergeMultimap(
+            Utils.newMultimap(args.headers()),
+            Utils.newMultimap("Content-Type", "application/json"));
 
     Map<String, Object> promptArgs = args.promptArgs();
     if (promptArgs == null) promptArgs = new HashMap<>();
@@ -3727,21 +3736,21 @@ public class MinioAsyncClient extends S3Base {
       this.awsDomainSuffix = null;
       this.awsDualstack = false;
 
-      if (!HttpUtils.HOSTNAME_REGEX.matcher(host).find()) return;
+      if (!Utils.HOSTNAME_REGEX.matcher(host).find()) return;
 
-      if (HttpUtils.AWS_ELB_ENDPOINT_REGEX.matcher(host).find()) {
+      if (Utils.AWS_ELB_ENDPOINT_REGEX.matcher(host).find()) {
         String[] tokens = host.split("\\.elb\\.amazonaws\\.com", 1)[0].split("\\.");
         this.region = tokens[tokens.length - 1];
         return;
       }
 
-      if (!HttpUtils.AWS_ENDPOINT_REGEX.matcher(host).find()) return;
+      if (!Utils.AWS_ENDPOINT_REGEX.matcher(host).find()) return;
 
-      if (!HttpUtils.AWS_S3_ENDPOINT_REGEX.matcher(host).find()) {
+      if (!Utils.AWS_S3_ENDPOINT_REGEX.matcher(host).find()) {
         throw new IllegalArgumentException("invalid Amazon AWS host " + host);
       }
 
-      Matcher matcher = HttpUtils.AWS_S3_PREFIX_REGEX.matcher(host);
+      Matcher matcher = Utils.AWS_S3_PREFIX_REGEX.matcher(host);
       matcher.lookingAt();
       int end = matcher.end();
 
@@ -3776,12 +3785,12 @@ public class MinioAsyncClient extends S3Base {
     }
 
     public Builder endpoint(String endpoint) {
-      setBaseUrl(HttpUtils.getBaseUrl(endpoint));
+      setBaseUrl(Utils.getBaseUrl(endpoint));
       return this;
     }
 
     public Builder endpoint(String endpoint, int port, boolean secure) {
-      HttpUrl url = HttpUtils.getBaseUrl(endpoint);
+      HttpUrl url = Utils.getBaseUrl(endpoint);
       if (port < 1 || port > 65535) {
         throw new IllegalArgumentException("port must be in range of 1 to 65535");
       }
@@ -3792,19 +3801,19 @@ public class MinioAsyncClient extends S3Base {
     }
 
     public Builder endpoint(URL url) {
-      HttpUtils.validateNotNull(url, "url");
+      Utils.validateNotNull(url, "url");
       return endpoint(HttpUrl.get(url));
     }
 
     public Builder endpoint(HttpUrl url) {
-      HttpUtils.validateNotNull(url, "url");
-      HttpUtils.validateUrl(url);
+      Utils.validateNotNull(url, "url");
+      Utils.validateUrl(url);
       setBaseUrl(url);
       return this;
     }
 
     public Builder region(String region) {
-      if (region != null && !HttpUtils.REGION_REGEX.matcher(region).find()) {
+      if (region != null && !Utils.REGION_REGEX.matcher(region).find()) {
         throw new IllegalArgumentException("invalid region " + region);
       }
       this.region = region;
@@ -3822,20 +3831,20 @@ public class MinioAsyncClient extends S3Base {
     }
 
     public Builder httpClient(OkHttpClient httpClient) {
-      HttpUtils.validateNotNull(httpClient, "http client");
+      Utils.validateNotNull(httpClient, "http client");
       this.httpClient = httpClient;
       return this;
     }
 
     public Builder httpClient(OkHttpClient httpClient, boolean close) {
-      HttpUtils.validateNotNull(httpClient, "http client");
+      Utils.validateNotNull(httpClient, "http client");
       this.httpClient = httpClient;
       this.closeHttpClient = close;
       return this;
     }
 
     public MinioAsyncClient build() {
-      HttpUtils.validateNotNull(this.baseUrl, "endpoint");
+      Utils.validateNotNull(this.baseUrl, "endpoint");
 
       if (this.awsDomainSuffix != null
           && this.awsDomainSuffix.endsWith(".cn")
@@ -3847,9 +3856,7 @@ public class MinioAsyncClient extends S3Base {
 
       if (this.httpClient == null) {
         this.closeHttpClient = true;
-        this.httpClient =
-            HttpUtils.newDefaultHttpClient(
-                DEFAULT_CONNECTION_TIMEOUT, DEFAULT_CONNECTION_TIMEOUT, DEFAULT_CONNECTION_TIMEOUT);
+        this.httpClient = Http.newDefaultClient();
       }
 
       return new MinioAsyncClient(
