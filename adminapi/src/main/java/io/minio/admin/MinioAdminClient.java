@@ -49,11 +49,7 @@ import java.security.InvalidKeyException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import javax.annotation.Nonnull;
@@ -89,7 +85,10 @@ public class MinioAdminClient {
     UPDATE_SERVICE_ACCOUNT("update-service-account"),
     LIST_SERVICE_ACCOUNTS("list-service-accounts"),
     DELETE_SERVICE_ACCOUNT("delete-service-account"),
-    INFO_SERVICE_ACCOUNT("info-service-account");
+    INFO_SERVICE_ACCOUNT("info-service-account"),
+    IDP_BUILTIN_POLICY_ATTACH("idp/builtin/policy/attach"),
+    IDP_BUILTIN_POLICY_DETACH("idp/builtin/policy/detach"),
+    ;
     private final String value;
 
     private Command(String value) {
@@ -841,6 +840,72 @@ public class MinioAdminClient {
       byte[] jsonData = Crypto.decrypt(response.body().byteStream(), creds.secretKey());
       return OBJECT_MAPPER.readValue(jsonData, GetServiceAccountInfoResp.class);
     }
+  }
+
+  /**
+   * Attach or Detach multiple policies to a user or group. <br>
+   *
+   * <p>Throws a runtime exception with the error code "XMinioAdminPolicyChangeAlreadyApplied" and
+   * message "The specified policy change is already in effect." if there is no difference between
+   * the policies before and after the change.
+   *
+   * @param command Command to be executed.
+   * @param polices Array of policy names to be attached.
+   * @param user User name.
+   * @param group Group name.
+   * @throws NoSuchAlgorithmException Thrown to indicate missing of MD5 or SHA-256 digest library.
+   * @throws InvalidKeyException Thrown to indicate missing of HMAC SHA-256 library.
+   * @throws IOException Thrown to indicate I/O error on MinIO REST operation.
+   */
+  private byte[] attachDetachPolicy(
+      @Nonnull Command command,
+      @Nonnull List<String> polices,
+      @Nullable String user,
+      @Nullable String group)
+      throws NoSuchAlgorithmException, InvalidKeyException, IOException,
+          InvalidCipherTextException {
+
+    if (user == null && group == null) {
+      throw new IllegalArgumentException("user or group must be provided");
+    }
+
+    Map<String, Object> policyEntity = new HashMap<>();
+    policyEntity.put("policies", polices);
+    if (user != null) {
+      policyEntity.put("user", user);
+    } else {
+      policyEntity.put("group", group);
+    }
+
+    Credentials creds = getCredentials();
+    try (Response response =
+        execute(
+            Method.POST,
+            command,
+            null,
+            Crypto.encrypt(OBJECT_MAPPER.writeValueAsBytes(policyEntity), creds.secretKey()))) {
+      return Crypto.decrypt(response.body().byteStream(), creds.secretKey());
+    }
+  }
+
+  /** Attach multiple policies to a user or group. */
+  public AttachPoliciesResp attachPolicy(
+      @Nonnull List<String> policies, @Nullable String user, @Nullable String group)
+      throws NoSuchAlgorithmException, InvalidKeyException, IOException,
+          InvalidCipherTextException {
+    byte[] result =
+        this.attachDetachPolicy(Command.IDP_BUILTIN_POLICY_ATTACH, policies, user, group);
+    return OBJECT_MAPPER.readValue(result, AttachPoliciesResp.class);
+  }
+
+  /** Detach multiple policies to a user or group. */
+  public DetachPoliciesResp detachPolicy(
+      @Nonnull List<String> policies, @Nullable String user, @Nullable String group)
+      throws NoSuchAlgorithmException, InvalidKeyException, IOException,
+          InvalidCipherTextException {
+    byte[] result =
+        this.attachDetachPolicy(Command.IDP_BUILTIN_POLICY_DETACH, policies, user, group);
+    return OBJECT_MAPPER.readValue(result, DetachPoliciesResp.class);
   }
 
   /**
