@@ -35,13 +35,13 @@ import org.simpleframework.xml.Root;
 @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_FIELD")
 public class CompleteMultipartUpload {
   @ElementList(name = "Part", inline = true)
-  private List<Part> partList;
+  private List<Part> parts;
 
   /** Constucts a new CompleteMultipartUpload object with given parts. */
   public CompleteMultipartUpload(@Nonnull Part[] parts) throws IllegalArgumentException {
     if (Objects.requireNonNull(parts, "parts must not be null").length == 0) {
       throw new IllegalArgumentException("parts cannot be empty");
     }
-    this.partList = Utils.unmodifiableList(Arrays.asList(parts));
+    this.parts = Utils.unmodifiableList(Arrays.asList(parts));
   }
 }

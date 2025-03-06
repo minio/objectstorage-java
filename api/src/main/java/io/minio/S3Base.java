@@ -23,11 +23,9 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.minio.credentials.Credentials;
 import io.minio.credentials.Provider;
 import io.minio.errors.ErrorResponseException;
@@ -36,14 +34,9 @@ import io.minio.errors.InternalException;
 import io.minio.errors.InvalidResponseException;
 import io.minio.errors.ServerException;
 import io.minio.errors.XmlParserException;
-import io.minio.http.HttpUtils;
-import io.minio.http.Method;
 import io.minio.messages.CompleteMultipartUpload;
 import io.minio.messages.CompleteMultipartUploadResult;
 import io.minio.messages.CopyPartResult;
-import io.minio.messages.DeleteError;
-import io.minio.messages.DeleteMarker;
-import io.minio.messages.DeleteObject;
 import io.minio.messages.DeleteRequest;
 import io.minio.messages.DeleteResult;
 import io.minio.messages.ErrorResponse;
@@ -59,7 +52,6 @@ import io.minio.messages.ListVersionsResult;
 import io.minio.messages.LocationConstraint;
 import io.minio.messages.NotificationRecords;
 import io.minio.messages.Part;
-import io.minio.messages.Prefix;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -87,9 +79,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -118,7 +108,6 @@ public abstract class S3Base implements AutoCloseable {
   protected static final String NO_SUCH_OBJECT_LOCK_CONFIGURATION = "NoSuchObjectLockConfiguration";
   protected static final String SERVER_SIDE_ENCRYPTION_CONFIGURATION_NOT_FOUND_ERROR =
       "ServerSideEncryptionConfigurationNotFoundError";
-  protected static final long DEFAULT_CONNECTION_TIMEOUT = TimeUnit.MINUTES.toMillis(5);
   // maximum allowed bucket policy size is 20KiB
   protected static final int MAX_BUCKET_POLICY_SIZE = 20 * 1024;
   protected static final String US_EAST_1 = "us-east-1";
@@ -136,7 +125,7 @@ public abstract class S3Base implements AutoCloseable {
   private static final Set<String> TRACE_QUERY_PARAMS =
       ImmutableSet.of("retention", "legal-hold", "tagging", UPLOAD_ID, "acl", "attributes");
   private PrintWriter traceStream;
-  private String userAgent = MinioProperties.INSTANCE.getDefaultUserAgent();
+  private String userAgent = Utils.getDefaultUserAgent();
 
   protected HttpUrl baseUrl;
   protected String awsS3Prefix;
@@ -147,29 +136,6 @@ public abstract class S3Base implements AutoCloseable {
   protected Provider provider;
   protected OkHttpClient httpClient;
   protected boolean closeHttpClient;
-
-  /** @deprecated This method is no longer supported. */
-  @Deprecated
-  protected S3Base(
-      HttpUrl baseUrl,
-      String awsS3Prefix,
-      String awsDomainSuffix,
-      boolean awsDualstack,
-      boolean useVirtualStyle,
-      String region,
-      Provider provider,
-      OkHttpClient httpClient) {
-    this(
-        baseUrl,
-        awsS3Prefix,
-        awsDomainSuffix,
-        awsDualstack,
-        useVirtualStyle,
-        region,
-        provider,
-        httpClient,
-        false);
-  }
 
   protected S3Base(
       HttpUrl baseUrl,
@@ -190,35 +156,6 @@ public abstract class S3Base implements AutoCloseable {
     this.provider = provider;
     this.httpClient = httpClient;
     this.closeHttpClient = closeHttpClient;
-  }
-
-  /** @deprecated This method is no longer supported. */
-  @Deprecated
-  protected S3Base(
-      HttpUrl baseUrl,
-      String region,
-      boolean isAwsHost,
-      boolean isFipsHost,
-      boolean isAccelerateHost,
-      boolean isDualStackHost,
-      boolean useVirtualStyle,
-      Provider provider,
-      OkHttpClient httpClient) {
-    this.baseUrl = baseUrl;
-    if (isAwsHost) this.awsS3Prefix = "s3.";
-    if (isFipsHost) this.awsS3Prefix = "s3-fips.";
-    if (isAccelerateHost) this.awsS3Prefix = "s3-accelerate.";
-    if (isAwsHost || isFipsHost || isAccelerateHost) {
-      String host = baseUrl.host();
-      if (host.endsWith(".amazonaws.com")) this.awsDomainSuffix = "amazonaws.com";
-      if (host.endsWith(".amazonaws.com.cn")) this.awsDomainSuffix = "amazonaws.com.cn";
-    }
-    this.awsDualstack = isDualStackHost;
-    this.useVirtualStyle = useVirtualStyle;
-    this.region = region;
-    this.provider = provider;
-    this.httpClient = httpClient;
-    this.closeHttpClient = false;
   }
 
   protected S3Base(S3Base client) {
@@ -248,39 +185,6 @@ public abstract class S3Base implements AutoCloseable {
                 + "' must not start with 'xn--' and must not end with '--s3alias' or '--ol-s3'");
       }
     }
-  }
-
-  /** Merge two Multimaps. */
-  protected Multimap<String, String> merge(
-      Multimap<String, String> m1, Multimap<String, String> m2) {
-    Multimap<String, String> map = HashMultimap.create();
-    if (m1 != null) map.putAll(m1);
-    if (m2 != null) map.putAll(m2);
-    return map;
-  }
-
-  /** Create new HashMultimap by alternating keys and values. */
-  protected Multimap<String, String> newMultimap(String... keysAndValues) {
-    if (keysAndValues.length % 2 != 0) {
-      throw new IllegalArgumentException("Expected alternating keys and values");
-    }
-
-    Multimap<String, String> map = HashMultimap.create();
-    for (int i = 0; i < keysAndValues.length; i += 2) {
-      map.put(keysAndValues[i], keysAndValues[i + 1]);
-    }
-
-    return map;
-  }
-
-  /** Create new HashMultimap with copy of Map. */
-  protected Multimap<String, String> newMultimap(Map<String, String> map) {
-    return (map != null) ? Multimaps.forMap(map) : HashMultimap.create();
-  }
-
-  /** Create new HashMultimap with copy of Multimap. */
-  protected Multimap<String, String> newMultimap(Multimap<String, String> map) {
-    return (map != null) ? HashMultimap.create(map) : HashMultimap.create();
   }
 
   /** Throws encapsulated exception wrapped by {@link ExecutionException}. */
@@ -319,7 +223,7 @@ public abstract class S3Base implements AutoCloseable {
   }
 
   private String[] handleRedirectResponse(
-      Method method, String bucketName, Response response, boolean retry) {
+      Http.Method method, String bucketName, Response response, boolean retry) {
     String code = null;
     String message = null;
 
@@ -339,7 +243,7 @@ public abstract class S3Base implements AutoCloseable {
 
     if (retry
         && region != null
-        && method.equals(Method.HEAD)
+        && method.equals(Http.Method.HEAD)
         && bucketName != null
         && regionCache.get(bucketName) != null) {
       code = RETRY_HEAD;
@@ -401,7 +305,7 @@ public abstract class S3Base implements AutoCloseable {
 
   /** Build URL for given parameters. */
   protected HttpUrl buildUrl(
-      Method method,
+      Http.Method method,
       String bucketName,
       String objectName,
       String region,
@@ -416,7 +320,7 @@ public abstract class S3Base implements AutoCloseable {
     if (queryParamMap != null) {
       for (Map.Entry<String, String> entry : queryParamMap.entries()) {
         urlBuilder.addEncodedQueryParameter(
-            S3Escaper.encode(entry.getKey()), S3Escaper.encode(entry.getValue()));
+            Utils.encode(entry.getKey()), Utils.encode(entry.getValue()));
       }
     }
 
@@ -428,7 +332,7 @@ public abstract class S3Base implements AutoCloseable {
     boolean enforcePathStyle = (
         // use path style for make bucket to workaround "AuthorizationHeaderMalformed" error from
         // s3.amazonaws.com
-        (method == Method.PUT && objectName == null && queryParamMap == null)
+        (method == Http.Method.PUT && objectName == null && queryParamMap == null)
 
             // use path style for location query
             || (queryParamMap != null && queryParamMap.containsKey("location"))
@@ -442,50 +346,27 @@ public abstract class S3Base implements AutoCloseable {
     }
 
     if (enforcePathStyle || !this.useVirtualStyle) {
-      urlBuilder.addEncodedPathSegment(S3Escaper.encode(bucketName));
+      urlBuilder.addEncodedPathSegment(Utils.encode(bucketName));
     } else {
       urlBuilder.host(bucketName + "." + host);
     }
 
     if (objectName != null) {
-      urlBuilder.addEncodedPathSegments(S3Escaper.encodePath(objectName));
+      urlBuilder.addEncodedPathSegments(Utils.encodePath(objectName));
     }
 
     return urlBuilder.build();
   }
 
-  /** Convert Multimap to Headers. */
-  protected Headers httpHeaders(Multimap<String, String> headerMap) {
-    Headers.Builder builder = new Headers.Builder();
-    if (headerMap == null) return builder.build();
-
-    if (headerMap.containsKey("Content-Encoding")) {
-      builder.add(
-          "Content-Encoding",
-          headerMap.get("Content-Encoding").stream()
-              .distinct()
-              .filter(encoding -> !encoding.isEmpty())
-              .collect(Collectors.joining(",")));
-    }
-
-    for (Map.Entry<String, String> entry : headerMap.entries()) {
-      if (!entry.getKey().equals("Content-Encoding")) {
-        builder.addUnsafeNonAscii(entry.getKey(), entry.getValue());
-      }
-    }
-
-    return builder.build();
-  }
-
   /** Create HTTP request for given paramaters. */
   protected Request createRequest(
-      HttpUrl url, Method method, Headers headers, Object body, int length, Credentials creds)
+      HttpUrl url, Http.Method method, Headers headers, Object body, int length, Credentials creds)
       throws InsufficientDataException, InternalException, IOException, NoSuchAlgorithmException {
     Request.Builder requestBuilder = new Request.Builder();
     requestBuilder.url(url);
 
     if (headers != null) requestBuilder.headers(headers);
-    requestBuilder.header("Host", HttpUtils.getHostHeader(url));
+    requestBuilder.header("Host", Utils.getHostHeader(url));
     // Disable default gzip compression by okhttp library.
     requestBuilder.header("Accept-Encoding", "identity");
     requestBuilder.header("User-Agent", this.userAgent);
@@ -494,27 +375,46 @@ public abstract class S3Base implements AutoCloseable {
       return requestBuilder.method(method.toString(), (RequestBody) body).build();
     }
 
-    String md5Hash = Digest.ZERO_MD5_HASH;
+    String md5Hash = Checksum.ZERO_MD5_HASH;
     if (body != null) {
-      md5Hash = (body instanceof byte[]) ? Digest.md5Hash((byte[]) body, length) : null;
+      md5Hash =
+          (body instanceof byte[])
+              ? Checksum.base64String(Checksum.MD5.sum((byte[]) body, 0, length))
+              : null;
     }
 
     String sha256Hash = null;
     if (creds != null) {
-      sha256Hash = Digest.ZERO_SHA256_HASH;
+      sha256Hash = Checksum.ZERO_SHA256_HASH;
       if (!url.isHttps()) {
         if (body != null) {
           if (body instanceof PartSource) {
-            sha256Hash = ((PartSource) body).sha256Hash();
+            PartSource partSource = (PartSource) body;
+            Map<Checksum.Algorithm, byte[]> checksums = partSource.checksums();
+            if (checksums != null) {
+              for (Map.Entry<Checksum.Algorithm, byte[]> entry : checksums.entrySet()) {
+                if (entry.getKey() == Checksum.Algorithm.SHA256) {
+                  sha256Hash = Checksum.hexString(entry.getValue());
+                }
+              }
+            }
           } else if (body instanceof byte[]) {
-            sha256Hash = Digest.sha256Hash((byte[]) body, length);
+            sha256Hash = Checksum.hexString(Checksum.SHA256.sum((byte[]) body, 0, length));
           }
         }
       } else {
         // Fix issue #415: No need to compute sha256 if endpoint scheme is HTTPS.
         sha256Hash = "UNSIGNED-PAYLOAD";
         if (body != null && body instanceof PartSource) {
-          sha256Hash = ((PartSource) body).sha256Hash();
+          PartSource partSource = (PartSource) body;
+          Map<Checksum.Algorithm, byte[]> checksums = partSource.checksums();
+          if (checksums != null) {
+            for (Map.Entry<Checksum.Algorithm, byte[]> entry : checksums.entrySet()) {
+              if (entry.getKey() == Checksum.Algorithm.SHA256) {
+                sha256Hash = Checksum.hexString(entry.getValue());
+              }
+            }
+          }
         }
       }
     }
@@ -531,16 +431,13 @@ public abstract class S3Base implements AutoCloseable {
 
     RequestBody requestBody = null;
     if (body != null) {
-      String contentType = (headers != null) ? headers.get("Content-Type") : null;
-      if (contentType != null && MediaType.parse(contentType) == null) {
-        throw new IllegalArgumentException(
-            "invalid content type '" + contentType + "' as per RFC 2045");
-      }
-
+      MediaType contentType = Http.mediaType(headers == null ? null : headers.get("Content-Type"));
       if (body instanceof PartSource) {
-        requestBody = new HttpRequestBody((PartSource) body, contentType);
+        PartSource partSource = (PartSource) body;
+        requestBody =
+            new Http.RequestBody(partSource.inputStream(), partSource.size(), contentType);
       } else {
-        requestBody = new HttpRequestBody((byte[]) body, length, contentType);
+        requestBody = new Http.RequestBody((byte[]) body, length, contentType);
       }
     }
 
@@ -566,61 +463,27 @@ public abstract class S3Base implements AutoCloseable {
   }
 
   /** Execute HTTP request asynchronously for given parameters. */
-  protected CompletableFuture<Response> executeAsync(
-      Method method,
-      String bucketName,
-      String objectName,
-      String region,
-      Headers headers,
-      Multimap<String, String> queryParamMap,
-      Object body,
-      int length)
+  protected CompletableFuture<Response> executeAsync(Http.S3Request s3request)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    boolean traceRequestBody = false;
-    if (body != null
-        && !(body instanceof PartSource || body instanceof byte[] || body instanceof RequestBody)) {
-      byte[] bytes;
-      if (body instanceof CharSequence) {
-        bytes = body.toString().getBytes(StandardCharsets.UTF_8);
-      } else {
-        bytes = Xml.marshal(body).getBytes(StandardCharsets.UTF_8);
-      }
-
-      body = bytes;
-      length = bytes.length;
-      traceRequestBody = true;
-    }
-
-    if (body == null && (method == Method.PUT || method == Method.POST)) {
-      body = HttpUtils.EMPTY_BODY;
-    }
-
-    HttpUrl url = buildUrl(method, bucketName, objectName, region, queryParamMap);
-    Credentials creds = (provider == null) ? null : provider.fetch();
-    Request req = createRequest(url, method, headers, body, length, creds);
-    if (!(body != null && body instanceof RequestBody) && creds != null) {
-      req =
-          Signer.signV4S3(
-              req,
-              region,
-              creds.accessKey(),
-              creds.secretKey(),
-              req.header("x-amz-content-sha256"));
-    }
-    final Request request = req;
-
-    StringBuilder traceBuilder =
-        newTraceBuilder(
-            request, traceRequestBody ? new String((byte[]) body, StandardCharsets.UTF_8) : null);
+    HttpUrl url =
+        buildUrl(
+            s3request.method(),
+            s3request.bucketName(),
+            s3request.objectName(),
+            s3request.region(),
+            s3request.queryParams());
+    Credentials credentials = (provider == null) ? null : provider.fetch();
+    okhttp3.Request request = s3request.httpRequest(url, credentials);
     PrintWriter traceStream = this.traceStream;
-    if (traceStream != null) traceStream.println(traceBuilder.toString());
-    traceBuilder.append("\n");
+    if (traceStream != null) {
+      traceStream.println(s3request.traces());
+      traceBuilder.append("\n");
+    }
 
     OkHttpClient httpClient = this.httpClient;
-    if (!(body instanceof byte[]) && (method == Method.PUT || method == Method.POST)) {
-      // Issue #924: disable connection retry for PUT and POST methods for other than byte array.
-      httpClient = this.httpClient.newBuilder().retryOnConnectionFailure(false).build();
+    if (!s3request.retryFailure()) {
+      httpClient = httpClient.newBuilder().retryOnConnectionFailure(false).build();
     }
 
     CompletableFuture<Response> completableFuture = new CompletableFuture<>();
@@ -643,14 +506,15 @@ public abstract class S3Base implements AutoCloseable {
               }
 
               private void onResponse(final Response response) throws IOException {
-                String trace =
-                    response.protocol().toString().toUpperCase(Locale.US)
-                        + " "
-                        + response.code()
-                        + "\n"
-                        + response.headers();
-                traceBuilder.append(trace).append("\n");
-                if (traceStream != null) traceStream.println(trace);
+                if (traceStream != null) {
+                  traceStream.println(
+                      response.protocol().toString().toUpperCase(Locale.US)
+                          + " "
+                          + response.code()
+                          + "\n"
+                          + response.headers()
+                          + "\n");
+                }
 
                 if (response.isSuccessful()) {
                   if (traceStream != null) {
@@ -658,7 +522,7 @@ public abstract class S3Base implements AutoCloseable {
                     // GetObject/ListenBucketNotification
                     // S3 API.
                     Set<String> keys = queryParamMap.keySet();
-                    if ((method != Method.GET
+                    if ((method != Http.Method.GET
                             || objectName == null
                             || !Collections.disjoint(keys, TRACE_QUERY_PARAMS))
                         && !(keys.contains("events")
@@ -678,17 +542,19 @@ public abstract class S3Base implements AutoCloseable {
                   errorXml = responseBody.string();
                 }
 
-                if (!("".equals(errorXml) && method.equals(Method.HEAD))) {
-                  traceBuilder.append(errorXml).append("\n");
-                  if (traceStream != null) traceStream.println(errorXml);
+                if (traceStream != null) {
+                  if (!("".equals(errorXml) && method.equals(Http.Method.HEAD))) {
+                    traceStream.println(errorXml);
+                  }
+                  if (errorXml != null && !errorXml.endsWith("\n")) {
+                    traceStream.println();
+                  }
+                  traceStream.println(END_HTTP);
                 }
-
-                traceBuilder.append(END_HTTP).append("\n");
-                if (traceStream != null) traceStream.println(END_HTTP);
 
                 // Error in case of Non-XML response from server for non-HEAD requests.
                 String contentType = response.headers().get("content-type");
-                if (!method.equals(Method.HEAD)
+                if (!method.equals(Http.Method.HEAD)
                     && (contentType == null
                         || !Arrays.asList(contentType.split(";")).contains("application/xml"))) {
                   if (response.code() == 304 && response.body().contentLength() == 0) {
@@ -717,7 +583,7 @@ public abstract class S3Base implements AutoCloseable {
                     completableFuture.completeExceptionally(e);
                     return;
                   }
-                } else if (!method.equals(Method.HEAD)) {
+                } else if (!method.equals(Http.Method.HEAD)) {
                   completableFuture.completeExceptionally(
                       new InvalidResponseException(
                           response.code(), contentType, errorXml, traceBuilder.toString()));
@@ -809,7 +675,7 @@ public abstract class S3Base implements AutoCloseable {
 
   /** Execute HTTP request asynchronously for given args and parameters. */
   protected CompletableFuture<Response> executeAsync(
-      Method method,
+      Http.Method method,
       BaseArgs args,
       Multimap<String, String> headers,
       Multimap<String, String> queryParams,
@@ -857,8 +723,8 @@ public abstract class S3Base implements AutoCloseable {
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(merge(extraHeaders, headers)),
-                    merge(extraQueryParams, queryParams),
+                    Utils.httpHeaders(Utils.mergeMultimap(extraHeaders, headers)),
+                    Utils.mergeMultimap(extraQueryParams, queryParams),
                     body,
                     length);
               } catch (InsufficientDataException
@@ -870,74 +736,6 @@ public abstract class S3Base implements AutoCloseable {
                 throw new CompletionException(e);
               }
             });
-  }
-
-  /**
-   * Execute HTTP request for given parameters.
-   *
-   * @deprecated This method is no longer supported. Use {@link #executeAsync}.
-   */
-  @Deprecated
-  protected Response execute(
-      Method method,
-      String bucketName,
-      String objectName,
-      String region,
-      Headers headers,
-      Multimap<String, String> queryParamMap,
-      Object body,
-      int length)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    CompletableFuture<Response> completableFuture =
-        executeAsync(method, bucketName, objectName, region, headers, queryParamMap, body, length);
-    try {
-      return completableFuture.get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
-  }
-
-  /**
-   * Execute HTTP request for given args and parameters.
-   *
-   * @deprecated This method is no longer supported. Use {@link #executeAsync}.
-   */
-  @Deprecated
-  protected Response execute(
-      Method method,
-      BaseArgs args,
-      Multimap<String, String> headers,
-      Multimap<String, String> queryParams,
-      Object body,
-      int length)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    String bucketName = null;
-    String region = null;
-    String objectName = null;
-
-    if (args instanceof BucketArgs) {
-      bucketName = ((BucketArgs) args).bucket();
-      region = ((BucketArgs) args).region();
-    }
-
-    if (args instanceof ObjectArgs) objectName = ((ObjectArgs) args).object();
-
-    return execute(
-        method,
-        bucketName,
-        objectName,
-        getRegion(bucketName, region),
-        httpHeaders(merge(args.extraHeaders(), headers)),
-        merge(args.extraQueryParams(), queryParams),
-        body,
-        length);
   }
 
   /** Returns region of given bucket either from region cache or set in constructor. */
@@ -965,7 +763,14 @@ public abstract class S3Base implements AutoCloseable {
     // Execute GetBucketLocation REST API to get region of the bucket.
     CompletableFuture<Response> future =
         executeAsync(
-            Method.GET, bucketName, null, US_EAST_1, null, newMultimap("location", null), null, 0);
+            Http.Method.GET,
+            bucketName,
+            null,
+            US_EAST_1,
+            null,
+            Utils.newMultimap("location", null),
+            null,
+            0);
     return future.thenApply(
         response -> {
           String location;
@@ -987,53 +792,12 @@ public abstract class S3Base implements AutoCloseable {
         });
   }
 
-  /**
-   * Returns region of given bucket either from region cache or set in constructor.
-   *
-   * @deprecated This method is no longer supported. Use {@link #getRegionAsync}.
-   */
-  @Deprecated
-  protected String getRegion(String bucketName, String region)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    try {
-      return getRegionAsync(bucketName, region).get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
-  }
-
   /** Execute asynchronously GET HTTP request for given parameters. */
   protected CompletableFuture<Response> executeGetAsync(
       BaseArgs args, Multimap<String, String> headers, Multimap<String, String> queryParams)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    return executeAsync(Method.GET, args, headers, queryParams, null, 0);
-  }
-
-  /**
-   * Execute GET HTTP request for given parameters.
-   *
-   * @deprecated This method is no longer supported. Use {@link #executeGetAsync}.
-   */
-  @Deprecated
-  protected Response executeGet(
-      BaseArgs args, Multimap<String, String> headers, Multimap<String, String> queryParams)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    try {
-      return executeGetAsync(args, headers, queryParams).get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
+    return executeAsync(Http.Method.GET, args, headers, queryParams, null, 0);
   }
 
   /** Execute asynchronously HEAD HTTP request for given parameters. */
@@ -1041,7 +805,7 @@ public abstract class S3Base implements AutoCloseable {
       BaseArgs args, Multimap<String, String> headers, Multimap<String, String> queryParams)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    return executeAsync(Method.HEAD, args, headers, queryParams, null, 0)
+    return executeAsync(Http.Method.HEAD, args, headers, queryParams, null, 0)
         .exceptionally(
             e -> {
               if (e instanceof ErrorResponseException) {
@@ -1059,7 +823,7 @@ public abstract class S3Base implements AutoCloseable {
               }
 
               try {
-                return executeAsync(Method.HEAD, args, headers, queryParams, null, 0);
+                return executeAsync(Http.Method.HEAD, args, headers, queryParams, null, 0);
               } catch (InsufficientDataException
                   | InternalException
                   | InvalidKeyException
@@ -1071,59 +835,17 @@ public abstract class S3Base implements AutoCloseable {
             });
   }
 
-  /**
-   * Execute HEAD HTTP request for given parameters.
-   *
-   * @deprecated This method is no longer supported. Use {@link #executeHeadAsync}.
-   */
-  @Deprecated
-  protected Response executeHead(
-      BaseArgs args, Multimap<String, String> headers, Multimap<String, String> queryParams)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    try {
-      return executeHeadAsync(args, headers, queryParams).get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
-  }
-
   /** Execute asynchronously DELETE HTTP request for given parameters. */
   protected CompletableFuture<Response> executeDeleteAsync(
       BaseArgs args, Multimap<String, String> headers, Multimap<String, String> queryParams)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    return executeAsync(Method.DELETE, args, headers, queryParams, null, 0)
+    return executeAsync(Http.Method.DELETE, args, headers, queryParams, null, 0)
         .thenApply(
             response -> {
               if (response != null) response.body().close();
               return response;
             });
-  }
-
-  /**
-   * Execute DELETE HTTP request for given parameters.
-   *
-   * @deprecated This method is no longer supported. Use {@link #executeDeleteAsync}.
-   */
-  @Deprecated
-  protected Response executeDelete(
-      BaseArgs args, Multimap<String, String> headers, Multimap<String, String> queryParams)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    try {
-      return executeDeleteAsync(args, headers, queryParams).get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /** Execute asynchronously POST HTTP request for given parameters. */
@@ -1134,31 +856,7 @@ public abstract class S3Base implements AutoCloseable {
       Object data)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    return executeAsync(Method.POST, args, headers, queryParams, data, 0);
-  }
-
-  /**
-   * Execute POST HTTP request for given parameters.
-   *
-   * @deprecated This method is no longer supported. Use {@link #executePostAsync}.
-   */
-  @Deprecated
-  protected Response executePost(
-      BaseArgs args,
-      Multimap<String, String> headers,
-      Multimap<String, String> queryParams,
-      Object data)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    try {
-      return executePostAsync(args, headers, queryParams, data).get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
+    return executeAsync(Http.Method.POST, args, headers, queryParams, data, 0);
   }
 
   /** Execute asynchronously PUT HTTP request for given parameters. */
@@ -1170,32 +868,7 @@ public abstract class S3Base implements AutoCloseable {
       int length)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    return executeAsync(Method.PUT, args, headers, queryParams, data, length);
-  }
-
-  /**
-   * Execute PUT HTTP request for given parameters.
-   *
-   * @deprecated This method is no longer supported. Use {@link #executePutAsync}.
-   */
-  @Deprecated
-  protected Response executePut(
-      BaseArgs args,
-      Multimap<String, String> headers,
-      Multimap<String, String> queryParams,
-      Object data,
-      int length)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    try {
-      return executePutAsync(args, headers, queryParams, data, length).get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
+    return executeAsync(Http.Method.PUT, args, headers, queryParams, data, length);
   }
 
   protected CompletableFuture<Integer> calculatePartCountAsync(List<ComposeSource> sources)
@@ -1282,96 +955,11 @@ public abstract class S3Base implements AutoCloseable {
     return completableFuture;
   }
 
-  /** Calculate part count of given compose sources. */
-  @Deprecated
-  protected int calculatePartCount(List<ComposeSource> sources)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    long objectSize = 0;
-    int partCount = 0;
-    int i = 0;
-    for (ComposeSource src : sources) {
-      i++;
-      StatObjectResponse stat = null;
-      try {
-        stat = statObjectAsync(new StatObjectArgs((ObjectReadArgs) src)).get();
-      } catch (InterruptedException e) {
-        throw new RuntimeException(e);
-      } catch (ExecutionException e) {
-        throwEncapsulatedException(e);
-      }
-
-      src.buildHeaders(stat.size(), stat.etag());
-
-      long size = stat.size();
-      if (src.length() != null) {
-        size = src.length();
-      } else if (src.offset() != null) {
-        size -= src.offset();
-      }
-
-      if (size < ObjectWriteArgs.MIN_MULTIPART_SIZE && sources.size() != 1 && i != sources.size()) {
-        throw new IllegalArgumentException(
-            "source "
-                + src.bucket()
-                + "/"
-                + src.object()
-                + ": size "
-                + size
-                + " must be greater than "
-                + ObjectWriteArgs.MIN_MULTIPART_SIZE);
-      }
-
-      objectSize += size;
-      if (objectSize > ObjectWriteArgs.MAX_OBJECT_SIZE) {
-        throw new IllegalArgumentException(
-            "destination object size must be less than " + ObjectWriteArgs.MAX_OBJECT_SIZE);
-      }
-
-      if (size > ObjectWriteArgs.MAX_PART_SIZE) {
-        long count = size / ObjectWriteArgs.MAX_PART_SIZE;
-        long lastPartSize = size - (count * ObjectWriteArgs.MAX_PART_SIZE);
-        if (lastPartSize > 0) {
-          count++;
-        } else {
-          lastPartSize = ObjectWriteArgs.MAX_PART_SIZE;
-        }
-
-        if (lastPartSize < ObjectWriteArgs.MIN_MULTIPART_SIZE
-            && sources.size() != 1
-            && i != sources.size()) {
-          throw new IllegalArgumentException(
-              "source "
-                  + src.bucket()
-                  + "/"
-                  + src.object()
-                  + ": "
-                  + "for multipart split upload of "
-                  + size
-                  + ", last part size is less than "
-                  + ObjectWriteArgs.MIN_MULTIPART_SIZE);
-        }
-        partCount += (int) count;
-      } else {
-        partCount++;
-      }
-
-      if (partCount > ObjectWriteArgs.MAX_MULTIPART_COUNT) {
-        throw new IllegalArgumentException(
-            "Compose sources create more than allowed multipart count "
-                + ObjectWriteArgs.MAX_MULTIPART_COUNT);
-      }
-    }
-
-    return partCount;
-  }
-
   private abstract class ObjectIterator implements Iterator<Result<Item>> {
     protected Result<Item> error;
     protected Iterator<? extends Item> itemIterator;
-    protected Iterator<DeleteMarker> deleteMarkerIterator;
-    protected Iterator<Prefix> prefixIterator;
+    protected Iterator<ListVersionsResult.DeleteMarker> deleteMarkerIterator;
+    protected Iterator<ListObjectsResult.Prefix> prefixIterator;
     protected boolean completed = false;
     protected ListObjectsResult listObjectsResult;
     protected String lastObjectName;
@@ -1402,8 +990,8 @@ public abstract class S3Base implements AutoCloseable {
         this.prefixIterator = this.listObjectsResult.commonPrefixes().iterator();
       } else {
         this.itemIterator = new LinkedList<Item>().iterator();
-        this.deleteMarkerIterator = new LinkedList<DeleteMarker>().iterator();
-        this.prefixIterator = new LinkedList<Prefix>().iterator();
+        this.deleteMarkerIterator = new LinkedList<ListVersionsResult.DeleteMarker>().iterator();
+        this.prefixIterator = new LinkedList<ListObjectsResult.Prefix>().iterator();
       }
     }
 
@@ -1622,42 +1210,18 @@ public abstract class S3Base implements AutoCloseable {
     };
   }
 
-  protected PartReader newPartReader(Object data, long objectSize, long partSize, int partCount) {
+  protected PartReader newPartReader(
+      Object data, long objectSize, long partSize, int partCount, Checksum.Algorithm... algorithms)
+      throws NoSuchAlgorithmException {
     if (data instanceof RandomAccessFile) {
-      return new PartReader((RandomAccessFile) data, objectSize, partSize, partCount);
+      return new PartReader((RandomAccessFile) data, objectSize, partSize, partCount, algorithms);
     }
 
     if (data instanceof InputStream) {
-      return new PartReader((InputStream) data, objectSize, partSize, partCount);
+      return new PartReader((InputStream) data, objectSize, partSize, partCount, algorithms);
     }
 
     return null;
-  }
-
-  /**
-   * Execute put object.
-   *
-   * @deprecated This method is no longer supported. Use {@link #putObjectAsync}.
-   */
-  @Deprecated
-  protected ObjectWriteResponse putObject(
-      PutObjectBaseArgs args,
-      Object data,
-      long objectSize,
-      long partSize,
-      int partCount,
-      String contentType)
-      throws ErrorResponseException, InsufficientDataException, InternalException,
-          InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
-          ServerException, XmlParserException {
-    try {
-      return putObjectAsync(args, data, objectSize, partSize, partCount, contentType).get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /** Notification result records representation. */
@@ -1748,7 +1312,7 @@ public abstract class S3Base implements AutoCloseable {
   private Multimap<String, String> getCommonListObjectsQueryParams(
       String delimiter, String encodingType, Integer maxKeys, String prefix) {
     Multimap<String, String> queryParams =
-        newMultimap(
+        Utils.newMultimap(
             "delimiter",
             (delimiter == null) ? "" : delimiter,
             "max-keys",
@@ -1773,8 +1337,7 @@ public abstract class S3Base implements AutoCloseable {
    * @param readTimeout HTTP read timeout in milliseconds.
    */
   public void setTimeout(long connectTimeout, long writeTimeout, long readTimeout) {
-    this.httpClient =
-        HttpUtils.setTimeout(this.httpClient, connectTimeout, writeTimeout, readTimeout);
+    this.httpClient = Http.setTimeout(this.httpClient, connectTimeout, writeTimeout, readTimeout);
   }
 
   /**
@@ -1787,9 +1350,11 @@ public abstract class S3Base implements AutoCloseable {
    * @throws KeyManagementException thrown to indicate key management error.
    * @throws NoSuchAlgorithmException thrown to indicate missing of SSL library.
    */
-  @SuppressFBWarnings(value = "SIC", justification = "Should not be used in production anyways.")
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "SIC",
+      justification = "Should not be used in production anyways.")
   public void ignoreCertCheck() throws KeyManagementException, NoSuchAlgorithmException {
-    this.httpClient = HttpUtils.disableCertCheck(this.httpClient);
+    this.httpClient = Http.disableCertCheck(this.httpClient);
   }
 
   /**
@@ -1801,8 +1366,7 @@ public abstract class S3Base implements AutoCloseable {
    */
   public void setAppInfo(String name, String version) {
     if (name == null || version == null) return;
-    this.userAgent =
-        MinioProperties.INSTANCE.getDefaultUserAgent() + " " + name.trim() + "/" + version.trim();
+    this.userAgent = Utils.getDefaultUserAgent() + " " + name.trim() + "/" + version.trim();
   }
 
   /**
@@ -1825,26 +1389,6 @@ public abstract class S3Base implements AutoCloseable {
    */
   public void traceOff() throws IOException {
     this.traceStream = null;
-  }
-
-  /**
-   * Enables accelerate endpoint for Amazon S3 endpoint.
-   *
-   * @deprecated This method is no longer supported.
-   */
-  @Deprecated
-  public void enableAccelerateEndpoint() {
-    this.awsS3Prefix = "s3-accelerate.";
-  }
-
-  /**
-   * Disables accelerate endpoint for Amazon S3 endpoint.
-   *
-   * @deprecated This method is no longer supported.
-   */
-  @Deprecated
-  public void disableAccelerateEndpoint() {
-    this.awsS3Prefix = "s3.";
   }
 
   /** Enables dual-stack endpoint for Amazon S3 endpoint. */
@@ -1870,7 +1414,7 @@ public abstract class S3Base implements AutoCloseable {
   /** Sets AWS S3 domain prefix. */
   public void setAwsS3Prefix(@Nonnull String awsS3Prefix) {
     if (awsS3Prefix == null) throw new IllegalArgumentException("null Amazon AWS S3 domain prefix");
-    if (!HttpUtils.AWS_S3_PREFIX_REGEX.matcher(awsS3Prefix).find()) {
+    if (!Utils.AWS_S3_PREFIX_REGEX.matcher(awsS3Prefix).find()) {
       throw new IllegalArgumentException("invalid Amazon AWS S3 domain prefix " + awsS3Prefix);
     }
     this.awsS3Prefix = awsS3Prefix;
@@ -1885,7 +1429,7 @@ public abstract class S3Base implements AutoCloseable {
     return executeHeadAsync(
             args,
             args.getHeaders(),
-            (args.versionId() != null) ? newMultimap("versionId", args.versionId()) : null)
+            (args.versionId() != null) ? Utils.newMultimap("versionId", args.versionId()) : null)
         .thenApply(
             response ->
                 new StatObjectResponse(
@@ -1925,12 +1469,12 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.DELETE,
+                    Http.Method.DELETE,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(extraHeaders),
-                    merge(extraQueryParams, newMultimap(UPLOAD_ID, uploadId)),
+                    Utils.httpHeaders(extraHeaders),
+                    Utils.mergeMultimap(extraQueryParams, Utils.newMultimap(UPLOAD_ID, uploadId)),
                     null,
                     0);
               } catch (InsufficientDataException
@@ -1951,52 +1495,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a
-   * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html">AbortMultipartUpload
-   * S3 API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket.
-   * @param objectName Object name in the bucket.
-   * @param uploadId Upload ID.
-   * @param extraHeaders Extra headers (Optional).
-   * @param extraQueryParams Extra query parameters (Optional).
-   * @return {@link AbortMultipartUploadResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #abortMultipartUploadAsync}.
-   */
-  @Deprecated
-  protected AbortMultipartUploadResponse abortMultipartUpload(
-      String bucketName,
-      String region,
-      String objectName,
-      String uploadId,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return abortMultipartUploadAsync(
-              bucketName, region, objectName, uploadId, extraHeaders, extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -2029,18 +1527,18 @@ public abstract class S3Base implements AutoCloseable {
       Multimap<String, String> extraQueryParams)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    Multimap<String, String> queryParams = newMultimap(extraQueryParams);
+    Multimap<String, String> queryParams = Utils.newMultimap(extraQueryParams);
     queryParams.put(UPLOAD_ID, uploadId);
     return getRegionAsync(bucketName, region)
         .thenCompose(
             location -> {
               try {
                 return executeAsync(
-                    Method.POST,
+                    Http.Method.POST,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(extraHeaders),
+                    Utils.httpHeaders(extraHeaders),
                     queryParams,
                     new CompleteMultipartUpload(parts),
                     0);
@@ -2107,54 +1605,6 @@ public abstract class S3Base implements AutoCloseable {
 
   /**
    * Do <a
-   * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html">CompleteMultipartUpload
-   * S3 API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket.
-   * @param objectName Object name in the bucket.
-   * @param uploadId Upload ID.
-   * @param parts List of parts.
-   * @param extraHeaders Extra headers (Optional).
-   * @param extraQueryParams Extra query parameters (Optional).
-   * @return {@link ObjectWriteResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #completeMultipartUploadAsync}.
-   */
-  @Deprecated
-  protected ObjectWriteResponse completeMultipartUpload(
-      String bucketName,
-      String region,
-      String objectName,
-      String uploadId,
-      Part[] parts,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return completeMultipartUploadAsync(
-              bucketName, region, objectName, uploadId, parts, extraHeaders, extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
-  }
-
-  /**
-   * Do <a
    * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html">CreateMultipartUpload
    * S3 API</a> asynchronously.
    *
@@ -2179,10 +1629,10 @@ public abstract class S3Base implements AutoCloseable {
       Multimap<String, String> extraQueryParams)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    Multimap<String, String> queryParams = newMultimap(extraQueryParams);
+    Multimap<String, String> queryParams = Utils.newMultimap(extraQueryParams);
     queryParams.put("uploads", "");
 
-    Multimap<String, String> headersCopy = newMultimap(headers);
+    Multimap<String, String> headersCopy = Utils.newMultimap(headers);
     // set content type if not set already
     if (!headersCopy.containsKey("Content-Type")) {
       headersCopy.put("Content-Type", "application/octet-stream");
@@ -2193,11 +1643,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.POST,
+                    Http.Method.POST,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(headersCopy),
+                    Utils.httpHeaders(headersCopy),
                     queryParams,
                     null,
                     0);
@@ -2228,49 +1678,6 @@ public abstract class S3Base implements AutoCloseable {
 
   /**
    * Do <a
-   * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html">CreateMultipartUpload
-   * S3 API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region name of buckets in S3 service.
-   * @param objectName Object name in the bucket.
-   * @param headers Request headers.
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link CreateMultipartUploadResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #createMultipartUploadAsync}.
-   */
-  @Deprecated
-  protected CreateMultipartUploadResponse createMultipartUpload(
-      String bucketName,
-      String region,
-      String objectName,
-      Multimap<String, String> headers,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return createMultipartUploadAsync(bucketName, region, objectName, headers, extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
-  }
-
-  /**
-   * Do <a
    * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html">DeleteObjects S3
    * API</a> asynchronously.
    *
@@ -2292,7 +1699,7 @@ public abstract class S3Base implements AutoCloseable {
   protected CompletableFuture<DeleteObjectsResponse> deleteObjectsAsync(
       String bucketName,
       String region,
-      List<DeleteObject> objectList,
+      List<DeleteRequest.Object> objectList,
       boolean quiet,
       boolean bypassGovernanceMode,
       Multimap<String, String> extraHeaders,
@@ -2306,22 +1713,24 @@ public abstract class S3Base implements AutoCloseable {
     }
 
     Multimap<String, String> headers =
-        merge(
+        Utils.mergeMultimap(
             extraHeaders,
-            bypassGovernanceMode ? newMultimap("x-amz-bypass-governance-retention", "true") : null);
+            bypassGovernanceMode
+                ? Utils.newMultimap("x-amz-bypass-governance-retention", "true")
+                : null);
 
-    final List<DeleteObject> objects = objectList;
+    final List<DeleteRequest.Object> objects = objectList;
     return getRegionAsync(bucketName, region)
         .thenCompose(
             location -> {
               try {
                 return executeAsync(
-                    Method.POST,
+                    Http.Method.POST,
                     bucketName,
                     null,
                     location,
-                    httpHeaders(headers),
-                    merge(extraQueryParams, newMultimap("delete", "")),
+                    Utils.httpHeaders(headers),
+                    Utils.mergeMultimap(extraQueryParams, Utils.newMultimap("delete", "")),
                     new DeleteRequest(objects, quiet),
                     0);
               } catch (InsufficientDataException
@@ -2338,8 +1747,8 @@ public abstract class S3Base implements AutoCloseable {
               try {
                 String bodyContent = response.body().string();
                 try {
-                  if (Xml.validate(DeleteError.class, bodyContent)) {
-                    DeleteError error = Xml.unmarshal(DeleteError.class, bodyContent);
+                  if (Xml.validate(DeleteResult.Error.class, bodyContent)) {
+                    DeleteResult.Error error = Xml.unmarshal(DeleteResult.Error.class, bodyContent);
                     DeleteResult result = new DeleteResult(error);
                     return new DeleteObjectsResponse(
                         response.headers(), bucketName, region, result);
@@ -2357,60 +1766,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a
-   * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html">DeleteObjects S3
-   * API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket (Optional).
-   * @param objectList List of object names.
-   * @param quiet Quiet flag.
-   * @param bypassGovernanceMode Bypass Governance retention mode.
-   * @param extraHeaders Extra headers for request (Optional).
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link DeleteObjectsResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #deleteObjectsAsync}.
-   */
-  @Deprecated
-  protected DeleteObjectsResponse deleteObjects(
-      String bucketName,
-      String region,
-      List<DeleteObject> objectList,
-      boolean quiet,
-      boolean bypassGovernanceMode,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return deleteObjectsAsync(
-              bucketName,
-              region,
-              objectList,
-              quiet,
-              bypassGovernanceMode,
-              extraHeaders,
-              extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -2453,7 +1808,7 @@ public abstract class S3Base implements AutoCloseable {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     Multimap<String, String> queryParams =
-        merge(
+        Utils.mergeMultimap(
             extraQueryParams,
             getCommonListObjectsQueryParams(delimiter, encodingType, maxKeys, prefix));
     queryParams.put("list-type", "2");
@@ -2467,11 +1822,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.GET,
+                    Http.Method.GET,
                     bucketName,
                     null,
                     location,
-                    httpHeaders(extraHeaders),
+                    Utils.httpHeaders(extraHeaders),
                     queryParams,
                     null,
                     0);
@@ -2496,74 +1851,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html">ListObjects
-   * version 1 S3 API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket (Optional).
-   * @param delimiter Delimiter (Optional).
-   * @param encodingType Encoding type (Optional).
-   * @param startAfter Fetch listing after this key (Optional).
-   * @param maxKeys Maximum object information to fetch (Optional).
-   * @param prefix Prefix (Optional).
-   * @param continuationToken Continuation token (Optional).
-   * @param fetchOwner Flag to fetch owner information (Optional).
-   * @param includeUserMetadata MinIO extension flag to include user metadata (Optional).
-   * @param extraHeaders Extra headers for request (Optional).
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link ListObjectsV2Response} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #listObjectsV2Async}.
-   */
-  @Deprecated
-  protected ListObjectsV2Response listObjectsV2(
-      String bucketName,
-      String region,
-      String delimiter,
-      String encodingType,
-      String startAfter,
-      Integer maxKeys,
-      String prefix,
-      String continuationToken,
-      boolean fetchOwner,
-      boolean includeUserMetadata,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws InvalidKeyException, NoSuchAlgorithmException, InsufficientDataException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException, IOException {
-    try {
-      return listObjectsV2Async(
-              bucketName,
-              region,
-              delimiter,
-              encodingType,
-              startAfter,
-              maxKeys,
-              prefix,
-              continuationToken,
-              fetchOwner,
-              includeUserMetadata,
-              extraHeaders,
-              extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -2600,7 +1887,7 @@ public abstract class S3Base implements AutoCloseable {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     Multimap<String, String> queryParams =
-        merge(
+        Utils.mergeMultimap(
             extraQueryParams,
             getCommonListObjectsQueryParams(delimiter, encodingType, maxKeys, prefix));
     if (marker != null) queryParams.put("marker", marker);
@@ -2610,11 +1897,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.GET,
+                    Http.Method.GET,
                     bucketName,
                     null,
                     location,
-                    httpHeaders(extraHeaders),
+                    Utils.httpHeaders(extraHeaders),
                     queryParams,
                     null,
                     0);
@@ -2639,65 +1926,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html">ListObjects
-   * version 1 S3 API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket (Optional).
-   * @param delimiter Delimiter (Optional).
-   * @param encodingType Encoding type (Optional).
-   * @param marker Marker (Optional).
-   * @param maxKeys Maximum object information to fetch (Optional).
-   * @param prefix Prefix (Optional).
-   * @param extraHeaders Extra headers for request (Optional).
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link ListObjectsV1Response} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #listObjectsV1Async}.
-   */
-  @Deprecated
-  protected ListObjectsV1Response listObjectsV1(
-      String bucketName,
-      String region,
-      String delimiter,
-      String encodingType,
-      String marker,
-      Integer maxKeys,
-      String prefix,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return listObjectsV1Async(
-              bucketName,
-              region,
-              delimiter,
-              encodingType,
-              marker,
-              maxKeys,
-              prefix,
-              extraHeaders,
-              extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -2737,7 +1965,7 @@ public abstract class S3Base implements AutoCloseable {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     Multimap<String, String> queryParams =
-        merge(
+        Utils.mergeMultimap(
             extraQueryParams,
             getCommonListObjectsQueryParams(delimiter, encodingType, maxKeys, prefix));
     if (keyMarker != null) queryParams.put("key-marker", keyMarker);
@@ -2749,11 +1977,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.GET,
+                    Http.Method.GET,
                     bucketName,
                     null,
                     location,
-                    httpHeaders(extraHeaders),
+                    Utils.httpHeaders(extraHeaders),
                     queryParams,
                     null,
                     0);
@@ -2781,69 +2009,6 @@ public abstract class S3Base implements AutoCloseable {
             });
   }
 
-  /**
-   * Do <a
-   * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectVersions.html">ListObjectVersions
-   * API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket (Optional).
-   * @param delimiter Delimiter (Optional).
-   * @param encodingType Encoding type (Optional).
-   * @param keyMarker Key marker (Optional).
-   * @param maxKeys Maximum object information to fetch (Optional).
-   * @param prefix Prefix (Optional).
-   * @param versionIdMarker Version ID marker (Optional).
-   * @param extraHeaders Extra headers for request (Optional).
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link ListObjectVersionsResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #listObjectVersionsAsync}.
-   */
-  @Deprecated
-  protected ListObjectVersionsResponse listObjectVersions(
-      String bucketName,
-      String region,
-      String delimiter,
-      String encodingType,
-      String keyMarker,
-      Integer maxKeys,
-      String prefix,
-      String versionIdMarker,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return listObjectVersionsAsync(
-              bucketName,
-              region,
-              delimiter,
-              encodingType,
-              keyMarker,
-              maxKeys,
-              prefix,
-              versionIdMarker,
-              extraHeaders,
-              extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
-  }
-
   private Part[] uploadParts(
       PutObjectBaseArgs args, String uploadId, PartReader partReader, PartSource firstPartSource)
       throws InterruptedException, ExecutionException, InsufficientDataException, InternalException,
@@ -2856,7 +2021,7 @@ public abstract class S3Base implements AutoCloseable {
 
       Multimap<String, String> ssecHeaders = null;
       // set encryption headers in the case of SSE-C.
-      if (args.sse() != null && args.sse() instanceof ServerSideEncryptionCustomerKey) {
+      if (args.sse() != null && args.sse() instanceof ServerSideEncryption.CustomerKey) {
         ssecHeaders = Multimaps.forMap(args.sse().headers());
       }
 
@@ -2982,7 +2147,7 @@ public abstract class S3Base implements AutoCloseable {
       throw new IllegalArgumentException("data must be RandomAccessFile or InputStream");
     }
 
-    Multimap<String, String> headers = newMultimap(args.extraHeaders());
+    Multimap<String, String> headers = Utils.newMultimap(args.extraHeaders());
     headers.putAll(args.genHeaders());
     if (!headers.containsKey("Content-Type")) headers.put("Content-Type", contentType);
 
@@ -3051,11 +2216,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.PUT,
+                    Http.Method.PUT,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(headers),
+                    Utils.httpHeaders(headers),
                     extraQueryParams,
                     partSource,
                     0);
@@ -3132,11 +2297,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.PUT,
+                    Http.Method.PUT,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(headers),
+                    Utils.httpHeaders(headers),
                     extraQueryParams,
                     data,
                     (int) length);
@@ -3163,51 +2328,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html">PutObject S3
-   * API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param objectName Object name in the bucket.
-   * @param data Object data must be InputStream, RandomAccessFile, byte[] or String.
-   * @param length Length of object data.
-   * @param headers Additional headers.
-   * @param extraQueryParams Additional query parameters if any.
-   * @return {@link ObjectWriteResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #putObjectAsync}.
-   */
-  @Deprecated
-  protected ObjectWriteResponse putObject(
-      String bucketName,
-      String region,
-      String objectName,
-      Object data,
-      long length,
-      Multimap<String, String> headers,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return putObjectAsync(bucketName, region, objectName, data, length, headers, extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -3247,9 +2367,9 @@ public abstract class S3Base implements AutoCloseable {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     Multimap<String, String> queryParams =
-        merge(
+        Utils.mergeMultimap(
             extraQueryParams,
-            newMultimap(
+            Utils.newMultimap(
                 "uploads",
                 "",
                 "delimiter",
@@ -3267,11 +2387,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.GET,
+                    Http.Method.GET,
                     bucketName,
                     null,
                     location,
-                    httpHeaders(extraHeaders),
+                    Utils.httpHeaders(extraHeaders),
                     queryParams,
                     null,
                     0);
@@ -3297,69 +2417,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a
-   * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html">ListMultipartUploads
-   * S3 API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket (Optional).
-   * @param delimiter Delimiter (Optional).
-   * @param encodingType Encoding type (Optional).
-   * @param keyMarker Key marker (Optional).
-   * @param maxUploads Maximum upload information to fetch (Optional).
-   * @param prefix Prefix (Optional).
-   * @param uploadIdMarker Upload ID marker (Optional).
-   * @param extraHeaders Extra headers for request (Optional).
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link ListMultipartUploadsResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #listMultipartUploadsAsync}.
-   */
-  @Deprecated
-  protected ListMultipartUploadsResponse listMultipartUploads(
-      String bucketName,
-      String region,
-      String delimiter,
-      String encodingType,
-      String keyMarker,
-      Integer maxUploads,
-      String prefix,
-      String uploadIdMarker,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return listMultipartUploadsAsync(
-              bucketName,
-              region,
-              delimiter,
-              encodingType,
-              keyMarker,
-              maxUploads,
-              prefix,
-              uploadIdMarker,
-              extraHeaders,
-              extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -3394,9 +2451,9 @@ public abstract class S3Base implements AutoCloseable {
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
     Multimap<String, String> queryParams =
-        merge(
+        Utils.mergeMultimap(
             extraQueryParams,
-            newMultimap(
+            Utils.newMultimap(
                 UPLOAD_ID,
                 uploadId,
                 "max-parts",
@@ -3410,11 +2467,11 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.GET,
+                    Http.Method.GET,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(extraHeaders),
+                    Utils.httpHeaders(extraHeaders),
                     queryParams,
                     null,
                     0);
@@ -3440,62 +2497,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html">ListParts S3
-   * API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Name of the bucket (Optional).
-   * @param objectName Object name in the bucket.
-   * @param maxParts Maximum parts information to fetch (Optional).
-   * @param partNumberMarker Part number marker (Optional).
-   * @param uploadId Upload ID.
-   * @param extraHeaders Extra headers for request (Optional).
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link ListPartsResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #listPartsAsync}.
-   */
-  @Deprecated
-  protected ListPartsResponse listParts(
-      String bucketName,
-      String region,
-      String objectName,
-      Integer maxParts,
-      Integer partNumberMarker,
-      String uploadId,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return listPartsAsync(
-              bucketName,
-              region,
-              objectName,
-              maxParts,
-              partNumberMarker,
-              uploadId,
-              extraHeaders,
-              extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -3534,14 +2535,14 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.PUT,
+                    Http.Method.PUT,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(extraHeaders),
-                    merge(
+                    Utils.httpHeaders(extraHeaders),
+                    Utils.mergeMultimap(
                         extraQueryParams,
-                        newMultimap(
+                        Utils.newMultimap(
                             "partNumber", Integer.toString(partNumber), UPLOAD_ID, uploadId)),
                     partSource,
                     0);
@@ -3631,14 +2632,14 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.PUT,
+                    Http.Method.PUT,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(extraHeaders),
-                    merge(
+                    Utils.httpHeaders(extraHeaders),
+                    Utils.mergeMultimap(
                         extraQueryParams,
-                        newMultimap(
+                        Utils.newMultimap(
                             "partNumber", Integer.toString(partNumber), UPLOAD_ID, uploadId)),
                     data,
                     (int) length);
@@ -3666,113 +2667,6 @@ public abstract class S3Base implements AutoCloseable {
                 response.close();
               }
             });
-  }
-
-  /**
-   * Do <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html">UploadPart S3
-   * API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket (Optional).
-   * @param objectName Object name in the bucket.
-   * @param data Object data must be InputStream, RandomAccessFile, byte[] or String.
-   * @param length Length of object data.
-   * @param uploadId Upload ID.
-   * @param partNumber Part number.
-   * @param extraHeaders Extra headers for request (Optional).
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link UploadPartResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #uploadPartAsync}.
-   */
-  @Deprecated
-  protected UploadPartResponse uploadPart(
-      String bucketName,
-      String region,
-      String objectName,
-      Object data,
-      long length,
-      String uploadId,
-      int partNumber,
-      Multimap<String, String> extraHeaders,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return uploadPartAsync(
-              bucketName,
-              region,
-              objectName,
-              data,
-              length,
-              uploadId,
-              partNumber,
-              extraHeaders,
-              extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
-  }
-
-  /**
-   * Do <a
-   * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html">UploadPartCopy
-   * S3 API</a>.
-   *
-   * @param bucketName Name of the bucket.
-   * @param region Region of the bucket (Optional).
-   * @param objectName Object name in the bucket.
-   * @param uploadId Upload ID.
-   * @param partNumber Part number.
-   * @param headers Request headers with source object definitions.
-   * @param extraQueryParams Extra query parameters for request (Optional).
-   * @return {@link UploadPartCopyResponse} object.
-   * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
-   * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
-   * @throws InternalException thrown to indicate internal library error.
-   * @throws InvalidKeyException thrown to indicate missing of HMAC SHA-256 library.
-   * @throws InvalidResponseException thrown to indicate S3 service returned invalid or no error
-   *     response.
-   * @throws IOException thrown to indicate I/O error on S3 operation.
-   * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
-   * @throws XmlParserException thrown to indicate XML parsing error.
-   * @deprecated This method is no longer supported. Use {@link #uploadPartCopyAsync}.
-   */
-  @Deprecated
-  protected UploadPartCopyResponse uploadPartCopy(
-      String bucketName,
-      String region,
-      String objectName,
-      String uploadId,
-      int partNumber,
-      Multimap<String, String> headers,
-      Multimap<String, String> extraQueryParams)
-      throws NoSuchAlgorithmException, InsufficientDataException, IOException, InvalidKeyException,
-          ServerException, XmlParserException, ErrorResponseException, InternalException,
-          InvalidResponseException {
-    try {
-      return uploadPartCopyAsync(
-              bucketName, region, objectName, uploadId, partNumber, headers, extraQueryParams)
-          .get();
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throwEncapsulatedException(e);
-      return null;
-    }
   }
 
   /**
@@ -3810,14 +2704,14 @@ public abstract class S3Base implements AutoCloseable {
             location -> {
               try {
                 return executeAsync(
-                    Method.PUT,
+                    Http.Method.PUT,
                     bucketName,
                     objectName,
                     location,
-                    httpHeaders(headers),
-                    merge(
+                    Utils.httpHeaders(headers),
+                    Utils.mergeMultimap(
                         extraQueryParams,
-                        newMultimap(
+                        Utils.newMultimap(
                             "partNumber", Integer.toString(partNumber), "uploadId", uploadId)),
                     null,
                     0);
@@ -3878,7 +2772,7 @@ public abstract class S3Base implements AutoCloseable {
       Multimap<String, String> extraQueryParams)
       throws InsufficientDataException, InternalException, InvalidKeyException, IOException,
           NoSuchAlgorithmException, XmlParserException {
-    Multimap<String, String> queryParams = newMultimap(extraQueryParams);
+    Multimap<String, String> queryParams = Utils.newMultimap(extraQueryParams);
     if (bucketRegion != null) queryParams.put("bucket-region", bucketRegion);
     if (maxBuckets != null)
       queryParams.put("max-buckets", Integer.toString(maxBuckets > 0 ? maxBuckets : 10000));

@@ -62,7 +62,7 @@ public abstract class PutObjectBaseArgs extends ObjectWriteArgs {
   public abstract static class Builder<B extends Builder<B, A>, A extends PutObjectBaseArgs>
       extends ObjectWriteArgs.Builder<B, A> {
     protected void validateContentType(String contentType) {
-      validateNotEmptyString(contentType, "content type");
+      Utils.validateNotEmptyString(contentType, "content type");
       if (MediaType.parse(contentType) == null) {
         throw new IllegalArgumentException(
             "invalid content type '" + contentType + "' as per RFC 2045");

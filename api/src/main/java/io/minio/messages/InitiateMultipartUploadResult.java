@@ -16,6 +16,7 @@
 
 package io.minio.messages;
 
+import io.minio.Utils;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Namespace;
 import org.simpleframework.xml.Root;
@@ -52,5 +53,12 @@ public class InitiateMultipartUploadResult {
   /** Returns upload ID. */
   public String uploadId() {
     return uploadId;
+  }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "InitiateMultipartUploadResult{bucketName=%s, objectName=%s, uploadId=%s}",
+        Utils.stringify(bucketName), Utils.stringify(objectName), Utils.stringify(uploadId));
   }
 }

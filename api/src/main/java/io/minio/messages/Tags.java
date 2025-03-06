@@ -24,11 +24,11 @@ import org.simpleframework.xml.Path;
 import org.simpleframework.xml.Root;
 
 /**
- * Object representation of request XML of <a
+ * Object representation of request and response XML of <a
  * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketTagging.html">PutBucketTagging
- * API</a> and <a
+ * API</a>, <a
  * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectTagging.html">PutObjectTagging
- * API</a> response XML of <a
+ * API</a>, <a
  * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketTagging.html">GetBucketTagging
  * API</a> and <a
  * href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectTagging.html">GetObjectTagging
@@ -102,5 +102,10 @@ public class Tags {
   /** Returns tags. */
   public Map<String, String> get() {
     return Utils.unmodifiableMap(tags);
+  }
+
+  @Override
+  public String toString() {
+    return String.format("Tags{%s}", Utils.stringify(tags));
   }
 }

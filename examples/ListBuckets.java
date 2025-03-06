@@ -18,7 +18,7 @@ import io.minio.ListBucketsArgs;
 import io.minio.MinioClient;
 import io.minio.Result;
 import io.minio.errors.MinioException;
-import io.minio.messages.Bucket;
+import io.minio.messages.ListAllMyBucketsResult;
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -43,9 +43,10 @@ public class ListBuckets {
       //         .build();
 
       // List buckets we have atleast read access.
-      Iterable<Result<Bucket>> results = minioClient.listBuckets(ListBucketsArgs.builder().build());
-      for (Result<Bucket> result : results) {
-        Bucket bucket = result.get();
+      Iterable<Result<ListAllMyBucketsResult.Bucket>> results =
+          minioClient.listBuckets(ListBucketsArgs.builder().build());
+      for (Result<ListAllMyBucketsResult.Bucket> result : results) {
+        ListAllMyBucketsResult.Bucket bucket = result.get();
         System.out.println(
             String.format(
                 "Bucket: %s, Region: %s, CreationDate: %s",

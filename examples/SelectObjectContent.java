@@ -19,10 +19,8 @@ import io.minio.PutObjectArgs;
 import io.minio.SelectObjectContentArgs;
 import io.minio.SelectResponseStream;
 import io.minio.errors.MinioException;
-import io.minio.messages.FileHeaderInfo;
 import io.minio.messages.InputSerialization;
 import io.minio.messages.OutputSerialization;
-import io.minio.messages.QuoteFields;
 import io.minio.messages.Stats;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -65,9 +63,11 @@ public class SelectObjectContent {
 
       String sqlExpression = "select * from S3Object";
       InputSerialization is =
-          new InputSerialization(null, false, null, null, FileHeaderInfo.USE, null, null, null);
+          InputSerialization.newCSV(
+              null, false, null, null, InputSerialization.FileHeaderInfo.USE, null, null, null);
       OutputSerialization os =
-          new OutputSerialization(null, null, null, QuoteFields.ASNEEDED, null);
+          OutputSerialization.newCSV(
+              null, null, null, OutputSerialization.QuoteFields.ASNEEDED, null);
 
       SelectResponseStream stream =
           minioClient.selectObjectContent(

@@ -67,11 +67,11 @@ public class PutObjectFanOutEntry extends BaseArgs {
   public static final class Builder extends BaseArgs.Builder<Builder, PutObjectFanOutEntry> {
     @Override
     protected void validate(PutObjectFanOutEntry args) {
-      validateNotEmptyString(args.key, "key");
+      Utils.validateNotEmptyString(args.key, "key");
     }
 
     public Builder key(String key) {
-      validateNotEmptyString(key, "key");
+      Utils.validateNotEmptyString(key, "key");
       operations.add(args -> args.key = key);
       return this;
     }

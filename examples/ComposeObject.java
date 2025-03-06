@@ -18,7 +18,6 @@ import io.minio.ComposeObjectArgs;
 import io.minio.ComposeSource;
 import io.minio.MinioClient;
 import io.minio.ServerSideEncryption;
-import io.minio.ServerSideEncryptionCustomerKey;
 import io.minio.errors.MinioException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -71,13 +70,13 @@ public class ComposeObject {
       }
 
       {
-        ServerSideEncryptionCustomerKey srcSsec =
-            new ServerSideEncryptionCustomerKey(
+        ServerSideEncryption.CustomerKey srcSsec =
+            new ServerSideEncryption.CustomerKey(
                 new SecretKeySpec(
                     "01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8), "AES"));
 
         ServerSideEncryption sse =
-            new ServerSideEncryptionCustomerKey(
+            new ServerSideEncryption.CustomerKey(
                 new SecretKeySpec(
                     "12345678912345678912345678912345".getBytes(StandardCharsets.UTF_8), "AES"));
 
