@@ -74,4 +74,50 @@ public class ListVersionsResult extends ListObjectsResult {
   public List<DeleteMarker> deleteMarkers() {
     return Utils.unmodifiableList(deleteMarkers);
   }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "ListVersionsResult{%s, keyMarker=%s, nextKeyMarker=%s, versionIdMarker=%s,"
+            + " nextVersionIdMarker=%s, contents=%s, deleteMarkers=%s}",
+        super.toString(),
+        Utils.stringify(keyMarker),
+        Utils.stringify(nextKeyMarker),
+        Utils.stringify(versionIdMarker),
+        Utils.stringify(nextVersionIdMarker),
+        Utils.stringify(contents),
+        Utils.stringify(deleteMarkers));
+  }
+
+  @Root(name = "Version", strict = false)
+  public static class Version extends Item {
+    public Version() {
+      super();
+    }
+
+    public Version(String prefix) {
+      super(prefix);
+    }
+
+    @Override
+    public String toString() {
+      return String.format("Version{%s}", super.toString());
+    }
+  }
+
+  @Root(name = "DeleteMarker", strict = false)
+  public static class DeleteMarker extends Item {
+    public DeleteMarker() {
+      super();
+    }
+
+    public DeleteMarker(String prefix) {
+      super(prefix);
+    }
+
+    @Override
+    public String toString() {
+      return String.format("DeleteMarker{%s}", super.toString());
+    }
+  }
 }

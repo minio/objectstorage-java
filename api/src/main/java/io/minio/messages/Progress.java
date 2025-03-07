@@ -16,10 +16,23 @@
 
 package io.minio.messages;
 
+import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Namespace;
 import org.simpleframework.xml.Root;
 
 /** Helper class to denote Progress information of S3 select response message. */
 @Root(name = "Progress", strict = false)
 @Namespace(reference = "http://s3.amazonaws.com/doc/2006-03-01/")
-public class Progress extends Stats {}
+public class Progress extends Stats {
+  public Progress(
+      @Element(name = "BytesScanned", required = false) Long bytesScanned,
+      @Element(name = "BytesProcessed", required = false) Long bytesProcessed,
+      @Element(name = "BytesReturned", required = false) Long bytesReturned) {
+    super(bytesScanned, bytesProcessed, bytesReturned);
+  }
+
+  @Override
+  public String toString() {
+    return String.format("Progress{%s}", super.stringify());
+  }
+}

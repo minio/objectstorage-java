@@ -16,6 +16,7 @@
 
 package io.minio.messages;
 
+import io.minio.Utils;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Namespace;
 import org.simpleframework.xml.Root;
@@ -47,5 +48,10 @@ public class LegalHold {
   /** Indicates whether the specified object has a Legal Hold in place or not. */
   public boolean status() {
     return status != null && status.equals("ON");
+  }
+
+  @Override
+  public String toString() {
+    return String.format("LegalHold{status=%s}", Utils.stringify(status));
   }
 }

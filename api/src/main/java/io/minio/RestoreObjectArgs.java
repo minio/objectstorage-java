@@ -34,7 +34,7 @@ public class RestoreObjectArgs extends ObjectVersionArgs {
   /** Argument builder of {@link RestoreObjectArgs}. */
   public static final class Builder extends ObjectVersionArgs.Builder<Builder, RestoreObjectArgs> {
     private void validateRequest(RestoreRequest request) {
-      validateNotNull(request, "request");
+      Utils.validateNotNull(request, "request");
     }
 
     public Builder request(RestoreRequest request) {

@@ -16,6 +16,7 @@
 
 package io.minio.messages;
 
+import io.minio.Utils;
 import java.util.Objects;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -61,6 +62,13 @@ public class VersioningConfiguration {
   public Boolean isMfaDeleteEnabled() {
     Boolean flag = (mfaDelete != null) ? Boolean.valueOf("Enabled".equals(mfaDelete)) : null;
     return flag;
+  }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "VersioningConfiguration{status=%s, mfaDelete=%s}",
+        Utils.stringify(status), Utils.stringify(mfaDelete));
   }
 
   public static enum Status {

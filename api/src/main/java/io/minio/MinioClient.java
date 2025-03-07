@@ -17,7 +17,6 @@
 
 package io.minio;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.minio.credentials.Provider;
 import io.minio.errors.BucketPolicyTooLargeException;
 import io.minio.errors.ErrorResponseException;
@@ -27,11 +26,11 @@ import io.minio.errors.InvalidResponseException;
 import io.minio.errors.ServerException;
 import io.minio.errors.XmlParserException;
 import io.minio.messages.AccessControlPolicy;
-import io.minio.messages.Bucket;
 import io.minio.messages.CORSConfiguration;
-import io.minio.messages.DeleteError;
+import io.minio.messages.DeleteResult;
 import io.minio.messages.Item;
 import io.minio.messages.LifecycleConfiguration;
+import io.minio.messages.ListAllMyBucketsResult;
 import io.minio.messages.NotificationConfiguration;
 import io.minio.messages.NotificationRecords;
 import io.minio.messages.ObjectLockConfiguration;
@@ -461,7 +460,7 @@ public class MinioClient implements AutoCloseable {
    * String url =
    *    minioClient.getPresignedObjectUrl(
    *        GetPresignedObjectUrlArgs.builder()
-   *            .method(Method.DELETE)
+   *            .method(Http.Method.DELETE)
    *            .bucket("my-bucketname")
    *            .object("my-objectname")
    *            .expiry(24 * 60 * 60)
@@ -476,7 +475,7 @@ public class MinioClient implements AutoCloseable {
    * String url =
    *    minioClient.getPresignedObjectUrl(
    *        GetPresignedObjectUrlArgs.builder()
-   *            .method(Method.PUT)
+   *            .method(Http.Method.PUT)
    *            .bucket("my-bucketname")
    *            .object("my-objectname")
    *            .expiry(1, TimeUnit.DAYS)
@@ -489,7 +488,7 @@ public class MinioClient implements AutoCloseable {
    * String url =
    *    minioClient.getPresignedObjectUrl(
    *        GetPresignedObjectUrlArgs.builder()
-   *            .method(Method.GET)
+   *            .method(Http.Method.GET)
    *            .bucket("my-bucketname")
    *            .object("my-objectname")
    *            .expiry(2, TimeUnit.HOURS)
@@ -641,20 +640,21 @@ public class MinioClient implements AutoCloseable {
    * objects.add(new DeleteObject("my-objectname1"));
    * objects.add(new DeleteObject("my-objectname2"));
    * objects.add(new DeleteObject("my-objectname3"));
-   * Iterable<Result<DeleteError>> results =
+   * Iterable<Result<DeleteResult.Error>> results =
    *     minioClient.removeObjects(
    *         RemoveObjectsArgs.builder().bucket("my-bucketname").objects(objects).build());
-   * for (Result<DeleteError> result : results) {
-   *   DeleteError error = result.get();
+   * for (Result<DeleteResult.Error> result : results) {
+   *   DeleteResult.Error error = result.get();
    *   System.out.println(
    *       "Error in deleting object " + error.objectName() + "; " + error.message());
    * }
    * }</pre>
    *
    * @param args {@link RemoveObjectsArgs} object.
-   * @return {@code Iterable<Result<DeleteError>>} - Lazy iterator contains object removal status.
+   * @return {@code Iterable<Result<DeleteResult.Error>>} - Lazy iterator contains object removal
+   *     status.
    */
-  public Iterable<Result<DeleteError>> removeObjects(RemoveObjectsArgs args) {
+  public Iterable<Result<DeleteResult.Error>> removeObjects(RemoveObjectsArgs args) {
     return asyncClient.removeObjects(args);
   }
 
@@ -755,13 +755,13 @@ public class MinioClient implements AutoCloseable {
    * Lists bucket information of all buckets.
    *
    * <pre>Example:{@code
-   * List<Bucket> bucketList = minioClient.listBuckets();
+   * List<ListAllMyBucketsResult.Bucket> bucketList = minioClient.listBuckets();
    * for (Bucket bucket : bucketList) {
    *   System.out.println(bucket.creationDate() + ", " + bucket.name());
    * }
    * }</pre>
    *
-   * @return {@code List<Bucket>} - List of bucket information.
+   * @return {@code List<ListAllMyBucketsResult.Bucket>} - List of bucket information.
    * @throws ErrorResponseException thrown to indicate S3 service returned an error response.
    * @throws InsufficientDataException thrown to indicate not enough data available in InputStream.
    * @throws InternalException thrown to indicate internal library error.
@@ -772,7 +772,7 @@ public class MinioClient implements AutoCloseable {
    * @throws NoSuchAlgorithmException thrown to indicate missing of MD5 or SHA-256 digest library.
    * @throws XmlParserException thrown to indicate XML parsing error.
    */
-  public List<Bucket> listBuckets()
+  public List<ListAllMyBucketsResult.Bucket> listBuckets()
       throws ErrorResponseException, InsufficientDataException, InternalException,
           InvalidKeyException, InvalidResponseException, IOException, NoSuchAlgorithmException,
           ServerException, XmlParserException {
@@ -790,16 +790,17 @@ public class MinioClient implements AutoCloseable {
    * Lists bucket information of all buckets.
    *
    * <pre>Example:{@code
-   * Iterable<Result<Bucket>> results = minioClient.listBuckets(ListBucketsArgs.builder().build());
-   * for (Result<Bucket> result : results) {
+   * Iterable<Result<ListAllMyBucketsResult.Bucket>> results = minioClient.listBuckets(ListBucketsArgs.builder().build());
+   * for (Result<ListAllMyBucketsResult.Bucket> result : results) {
    *   Bucket bucket = result.get();
    *   System.out.println(String.format("Bucket: %s, Region: %s, CreationDate: %s", bucket.name(), bucket.bucketRegion(), bucket.creationDate()));
    * }
    * }</pre>
    *
-   * @return {@link Iterable}&lt;{@link List}&lt;{@link Bucket}&gt;&gt; object.
+   * @return {@link Iterable}&lt;{@link List}&lt;{@link ListAllMyBucketsResult.Bucket}&gt;&gt;
+   *     object.
    */
-  public Iterable<Result<Bucket>> listBuckets(ListBucketsArgs args) {
+  public Iterable<Result<ListAllMyBucketsResult.Bucket>> listBuckets(ListBucketsArgs args) {
     return asyncClient.listBuckets(args);
   }
 
@@ -2624,7 +2625,9 @@ public class MinioClient implements AutoCloseable {
    * @throws KeyManagementException thrown to indicate key management error.
    * @throws NoSuchAlgorithmException thrown to indicate missing of SSL library.
    */
-  @SuppressFBWarnings(value = "SIC", justification = "Should not be used in production anyways.")
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "SIC",
+      justification = "Should not be used in production anyways.")
   public void ignoreCertCheck() throws KeyManagementException, NoSuchAlgorithmException {
     asyncClient.ignoreCertCheck();
   }
@@ -2658,26 +2661,6 @@ public class MinioClient implements AutoCloseable {
    */
   public void traceOff() throws IOException {
     asyncClient.traceOff();
-  }
-
-  /**
-   * Enables accelerate endpoint for Amazon S3 endpoint.
-   *
-   * @deprecated This method is no longer supported.
-   */
-  @Deprecated
-  public void enableAccelerateEndpoint() {
-    asyncClient.enableAccelerateEndpoint();
-  }
-
-  /**
-   * Disables accelerate endpoint for Amazon S3 endpoint.
-   *
-   * @deprecated This method is no longer supported.
-   */
-  @Deprecated
-  public void disableAccelerateEndpoint() {
-    asyncClient.disableAccelerateEndpoint();
   }
 
   /** Enables dual-stack endpoint for Amazon S3 endpoint. */

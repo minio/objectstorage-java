@@ -46,6 +46,11 @@ public class CORSConfiguration {
     return Utils.unmodifiableList(rules);
   }
 
+  @Override
+  public String toString() {
+    return String.format("CORSConfiguration{rules=%s}", Utils.stringify(rules));
+  }
+
   public static class CORSRule {
     @ElementList(entry = "AllowedHeader", inline = true, required = false)
     private List<String> allowedHeaders;
@@ -106,6 +111,19 @@ public class CORSConfiguration {
 
     public Integer maxAgeSeconds() {
       return maxAgeSeconds;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "CORSRule{allowedHeaders=%s, allowedMethods=%s, allowedOrigins=%s, exposeHeaders=%s, "
+              + "id=%s, maxAgeSeconds=%s}",
+          Utils.stringify(allowedHeaders),
+          Utils.stringify(allowedMethods),
+          Utils.stringify(allowedOrigins),
+          Utils.stringify(exposeHeaders),
+          Utils.stringify(id),
+          Utils.stringify(maxAgeSeconds));
     }
   }
 }

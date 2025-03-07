@@ -69,7 +69,7 @@ public class CopyObjectArgs extends ObjectWriteArgs {
     @Override
     protected void validate(CopyObjectArgs args) {
       super.validate(args);
-      validateNotNull(args.source, "copy source");
+      Utils.validateNotNull(args.source, "copy source");
       if (args.source.offset() != null || args.source.length() != null) {
         if (args.metadataDirective != null && args.metadataDirective == Directive.COPY) {
           throw new IllegalArgumentException(
@@ -83,7 +83,7 @@ public class CopyObjectArgs extends ObjectWriteArgs {
     }
 
     public Builder source(CopySource source) {
-      validateNotNull(source, "copy source");
+      Utils.validateNotNull(source, "copy source");
       operations.add(args -> args.source = source);
       return this;
     }

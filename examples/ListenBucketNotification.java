@@ -19,7 +19,6 @@ import io.minio.ListenBucketNotificationArgs;
 import io.minio.MinioClient;
 import io.minio.Result;
 import io.minio.errors.MinioException;
-import io.minio.messages.Event;
 import io.minio.messages.NotificationRecords;
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -55,8 +54,9 @@ public class ListenBucketNotification {
                   .build())) {
         while (ci.hasNext()) {
           NotificationRecords records = ci.next().get();
-          Event event = records.events().get(0);
-          System.out.println(event.bucketName() + "/" + event.objectName() + " has been created");
+          NotificationRecords.Event event = records.events().get(0);
+          System.out.println(
+              event.bucket().name() + "/" + event.object().key() + " has been created");
         }
       } catch (IOException e) {
         System.out.println("Error occurred: " + e);

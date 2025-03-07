@@ -24,30 +24,48 @@ import org.simpleframework.xml.Root;
 @Root(name = "Stats", strict = false)
 @Namespace(reference = "http://s3.amazonaws.com/doc/2006-03-01/")
 public class Stats {
-  @Element(name = "BytesScanned")
-  private long bytesScanned = -1;
+  @Element(name = "BytesScanned", required = false)
+  private Long bytesScanned;
 
-  @Element(name = "BytesProcessed")
-  private long bytesProcessed = -1;
+  @Element(name = "BytesProcessed", required = false)
+  private Long bytesProcessed;
 
-  @Element(name = "BytesReturned")
-  private long bytesReturned = -1;
+  @Element(name = "BytesReturned", required = false)
+  private Long bytesReturned;
 
   /** Constructs a new Stats object. */
-  public Stats() {}
+  public Stats(
+      @Element(name = "BytesScanned", required = false) Long bytesScanned,
+      @Element(name = "BytesProcessed", required = false) Long bytesProcessed,
+      @Element(name = "BytesReturned", required = false) Long bytesReturned) {
+    this.bytesScanned = bytesScanned;
+    this.bytesProcessed = bytesProcessed;
+    this.bytesReturned = bytesReturned;
+  }
 
   /** Returns bytes scanned. */
-  public long bytesScanned() {
-    return this.bytesScanned;
+  public Long bytesScanned() {
+    return bytesScanned;
   }
 
   /** Returns bytes processed. */
-  public long bytesProcessed() {
-    return this.bytesProcessed;
+  public Long bytesProcessed() {
+    return bytesProcessed;
   }
 
   /** Returns bytes returned. */
-  public long bytesReturned() {
-    return this.bytesReturned;
+  public Long bytesReturned() {
+    return bytesReturned;
+  }
+
+  protected String stringify() {
+    return String.format(
+        "bytesScanned=%s, bytesProcessed=%s, bytesReturned=%s",
+        bytesScanned, bytesProcessed, bytesReturned);
+  }
+
+  @Override
+  public String toString() {
+    return String.format("Stats{%s}", stringify());
   }
 }

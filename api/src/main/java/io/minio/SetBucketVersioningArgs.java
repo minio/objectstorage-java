@@ -37,7 +37,7 @@ public class SetBucketVersioningArgs extends BucketArgs {
   /** Argument builder of {@link SetBucketVersioningArgs}. */
   public static final class Builder extends BucketArgs.Builder<Builder, SetBucketVersioningArgs> {
     private void validateConfig(VersioningConfiguration config) {
-      validateNotNull(config, "versioning configuration");
+      Utils.validateNotNull(config, "versioning configuration");
     }
 
     protected void validate(SetBucketVersioningArgs args) {

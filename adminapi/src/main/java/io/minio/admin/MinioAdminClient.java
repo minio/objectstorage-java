@@ -27,18 +27,16 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import io.minio.Digest;
-import io.minio.MinioProperties;
-import io.minio.S3Escaper;
+import io.minio.Checksum;
+import io.minio.Http;
 import io.minio.Signer;
 import io.minio.Time;
+import io.minio.Utils;
 import io.minio.admin.messages.DataUsageInfo;
 import io.minio.admin.messages.info.Message;
 import io.minio.credentials.Credentials;
 import io.minio.credentials.Provider;
 import io.minio.credentials.StaticProvider;
-import io.minio.http.HttpUtils;
-import io.minio.http.Method;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -115,7 +113,7 @@ public class MinioAdminClient {
     OBJECT_MAPPER.registerModule(new JavaTimeModule());
   }
 
-  private String userAgent = MinioProperties.INSTANCE.getDefaultUserAgent();
+  private String userAgent = Utils.getDefaultUserAgent();
   private PrintWriter traceStream;
 
   private HttpUrl baseUrl;
@@ -138,7 +136,7 @@ public class MinioAdminClient {
   }
 
   private Response execute(
-      Method method, Command command, Multimap<String, String> queryParamMap, byte[] body)
+      Http.Method method, Command command, Multimap<String, String> queryParamMap, byte[] body)
       throws InvalidKeyException, IOException, NoSuchAlgorithmException {
     Credentials creds = getCredentials();
 
@@ -146,32 +144,33 @@ public class MinioAdminClient {
         this.baseUrl
             .newBuilder()
             .host(this.baseUrl.host())
-            .addEncodedPathSegments(S3Escaper.encodePath("minio/admin/v3/" + command.toString()));
+            .addEncodedPathSegments(Utils.encodePath("minio/admin/v3/" + command.toString()));
     if (queryParamMap != null) {
       for (Map.Entry<String, String> entry : queryParamMap.entries()) {
         urlBuilder.addEncodedQueryParameter(
-            S3Escaper.encode(entry.getKey()), S3Escaper.encode(entry.getValue()));
+            Utils.encode(entry.getKey()), Utils.encode(entry.getValue()));
       }
     }
     HttpUrl url = urlBuilder.build();
 
     Request.Builder requestBuilder = new Request.Builder();
     requestBuilder.url(url);
-    requestBuilder.header("Host", HttpUtils.getHostHeader(url));
+    requestBuilder.header("Host", Utils.getHostHeader(url));
     requestBuilder.header("Accept-Encoding", "identity"); // Disable default gzip compression.
     requestBuilder.header("User-Agent", this.userAgent);
     requestBuilder.header("x-amz-date", ZonedDateTime.now().format(Time.AMZ_DATE_FORMAT));
     if (creds.sessionToken() != null) {
       requestBuilder.header("X-Amz-Security-Token", creds.sessionToken());
     }
-    if (body == null && (method != Method.GET && method != Method.HEAD)) {
-      body = HttpUtils.EMPTY_BODY;
+    if (body == null && (method != Http.Method.GET && method != Http.Method.HEAD)) {
+      body = Utils.EMPTY_BODY;
     }
     if (body != null) {
-      requestBuilder.header("x-amz-content-sha256", Digest.sha256Hash(body, body.length));
+      requestBuilder.header(
+          "x-amz-content-sha256", Checksum.hexString(Checksum.SHA256.sum(body, 0, body.length)));
       requestBuilder.method(method.toString(), RequestBody.create(body, DEFAULT_MEDIA_TYPE));
     } else {
-      requestBuilder.header("x-amz-content-sha256", Digest.ZERO_SHA256_HASH);
+      requestBuilder.header("x-amz-content-sha256", Checksum.ZERO_SHA256_HASH);
     }
     Request request = requestBuilder.build();
 
@@ -251,7 +250,7 @@ public class MinioAdminClient {
     Credentials creds = getCredentials();
     try (Response response =
         execute(
-            Method.PUT,
+            Http.Method.PUT,
             Command.ADD_USER,
             ImmutableMultimap.of("accessKey", accessKey),
             Crypto.encrypt(OBJECT_MAPPER.writeValueAsBytes(userInfo), creds.secretKey()))) {}
@@ -270,7 +269,10 @@ public class MinioAdminClient {
       throws NoSuchAlgorithmException, InvalidKeyException, IOException {
     try (Response response =
         execute(
-            Method.GET, Command.USER_INFO, ImmutableMultimap.of("accessKey", accessKey), null)) {
+            Http.Method.GET,
+            Command.USER_INFO,
+            ImmutableMultimap.of("accessKey", accessKey),
+            null)) {
       byte[] jsonData = response.body().bytes();
       return OBJECT_MAPPER.readValue(jsonData, UserInfo.class);
     }
@@ -288,7 +290,7 @@ public class MinioAdminClient {
   public Map<String, UserInfo> listUsers()
       throws NoSuchAlgorithmException, InvalidKeyException, IOException,
           InvalidCipherTextException {
-    try (Response response = execute(Method.GET, Command.LIST_USERS, null, null)) {
+    try (Response response = execute(Http.Method.GET, Command.LIST_USERS, null, null)) {
       Credentials creds = getCredentials();
       byte[] jsonData = Crypto.decrypt(response.body().byteStream(), creds.secretKey());
       MapType mapType =
@@ -315,7 +317,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.DELETE,
+            Http.Method.DELETE,
             Command.REMOVE_USER,
             ImmutableMultimap.of("accessKey", accessKey),
             null)) {}
@@ -342,7 +344,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.PUT,
+            Http.Method.PUT,
             Command.ADD_UPDATE_REMOVE_GROUP,
             null,
             OBJECT_MAPPER.writeValueAsBytes(groupAddUpdateRemoveInfo))) {}
@@ -360,7 +362,7 @@ public class MinioAdminClient {
   public GroupInfo getGroupInfo(String group)
       throws NoSuchAlgorithmException, InvalidKeyException, IOException {
     try (Response response =
-        execute(Method.GET, Command.GROUP_INFO, ImmutableMultimap.of("group", group), null)) {
+        execute(Http.Method.GET, Command.GROUP_INFO, ImmutableMultimap.of("group", group), null)) {
       byte[] jsonData = response.body().bytes();
       return OBJECT_MAPPER.readValue(jsonData, GroupInfo.class);
     }
@@ -376,7 +378,7 @@ public class MinioAdminClient {
    */
   public List<String> listGroups()
       throws NoSuchAlgorithmException, InvalidKeyException, IOException {
-    try (Response response = execute(Method.GET, Command.LIST_GROUPS, null, null)) {
+    try (Response response = execute(Http.Method.GET, Command.LIST_GROUPS, null, null)) {
       byte[] jsonData = response.body().bytes();
       CollectionType mapType =
           OBJECT_MAPPER.getTypeFactory().constructCollectionType(ArrayList.class, String.class);
@@ -402,7 +404,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.PUT,
+            Http.Method.PUT,
             Command.ADD_UPDATE_REMOVE_GROUP,
             null,
             OBJECT_MAPPER.writeValueAsBytes(groupAddUpdateRemoveInfo))) {}
@@ -427,7 +429,7 @@ public class MinioAdminClient {
     quotaEntity.put("quota", unit.toBytes(size));
     try (Response response =
         execute(
-            Method.PUT,
+            Http.Method.PUT,
             Command.SET_BUCKET_QUOTA,
             ImmutableMultimap.of("bucket", bucketName),
             OBJECT_MAPPER.writeValueAsBytes(quotaEntity))) {}
@@ -446,7 +448,7 @@ public class MinioAdminClient {
       throws IOException, NoSuchAlgorithmException, InvalidKeyException {
     try (Response response =
         execute(
-            Method.GET,
+            Http.Method.GET,
             Command.GET_BUCKET_QUOTA,
             ImmutableMultimap.of("bucket", bucketName),
             null)) {
@@ -513,7 +515,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.PUT,
+            Http.Method.PUT,
             Command.ADD_CANNED_POLICY,
             ImmutableMultimap.of("name", name),
             policy.getBytes(StandardCharsets.UTF_8))) {}
@@ -541,7 +543,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.PUT,
+            Http.Method.PUT,
             Command.SET_USER_OR_GROUP_POLICY,
             ImmutableMultimap.of(
                 "userOrGroup",
@@ -564,7 +566,7 @@ public class MinioAdminClient {
    */
   public Map<String, String> listCannedPolicies()
       throws NoSuchAlgorithmException, InvalidKeyException, IOException {
-    try (Response response = execute(Method.GET, Command.LIST_CANNED_POLICIES, null, null)) {
+    try (Response response = execute(Http.Method.GET, Command.LIST_CANNED_POLICIES, null, null)) {
       MapType mapType =
           OBJECT_MAPPER
               .getTypeFactory()
@@ -593,7 +595,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.DELETE,
+            Http.Method.DELETE,
             Command.REMOVE_CANNED_POLICY,
             ImmutableMultimap.of("name", name),
             null)) {}
@@ -609,7 +611,7 @@ public class MinioAdminClient {
    */
   public DataUsageInfo getDataUsageInfo()
       throws IOException, NoSuchAlgorithmException, InvalidKeyException {
-    try (Response response = execute(Method.GET, Command.DATA_USAGE_INFO, null, null)) {
+    try (Response response = execute(Http.Method.GET, Command.DATA_USAGE_INFO, null, null)) {
       return OBJECT_MAPPER.readValue(response.body().bytes(), DataUsageInfo.class);
     }
   }
@@ -623,7 +625,7 @@ public class MinioAdminClient {
    * @throws IOException thrown to indicate I/O error on MinIO REST operation.
    */
   public Message getServerInfo() throws IOException, NoSuchAlgorithmException, InvalidKeyException {
-    try (Response response = execute(Method.GET, Command.INFO, null, null)) {
+    try (Response response = execute(Http.Method.GET, Command.INFO, null, null)) {
       return OBJECT_MAPPER.readValue(response.body().charStream(), Message.class);
     }
   }
@@ -685,13 +687,13 @@ public class MinioAdminClient {
       serviceAccount.put("description", description);
     }
     if (expiration != null) {
-      serviceAccount.put("expiration", expiration.format(Time.EXPIRATION_DATE_FORMAT));
+      serviceAccount.put("expiration", expiration.format(Time.ISO8601UTC_FORMAT));
     }
 
     Credentials creds = getCredentials();
     try (Response response =
         execute(
-            Method.PUT,
+            Http.Method.PUT,
             Command.ADD_SERVICE_ACCOUNT,
             null,
             Crypto.encrypt(OBJECT_MAPPER.writeValueAsBytes(serviceAccount), creds.secretKey()))) {
@@ -752,13 +754,13 @@ public class MinioAdminClient {
       serviceAccount.put("newDescription", newDescription);
     }
     if (newExpiration != null) {
-      serviceAccount.put("newExpiration", newExpiration.format(Time.EXPIRATION_DATE_FORMAT));
+      serviceAccount.put("newExpiration", newExpiration.format(Time.ISO8601UTC_FORMAT));
     }
 
     Credentials creds = getCredentials();
     try (Response response =
         execute(
-            Method.POST,
+            Http.Method.POST,
             Command.UPDATE_SERVICE_ACCOUNT,
             ImmutableMultimap.of("accessKey", accessKey),
             Crypto.encrypt(OBJECT_MAPPER.writeValueAsBytes(serviceAccount), creds.secretKey()))) {}
@@ -780,7 +782,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.DELETE,
+            Http.Method.DELETE,
             Command.DELETE_SERVICE_ACCOUNT,
             ImmutableMultimap.of("accessKey", accessKey),
             null)) {}
@@ -805,7 +807,7 @@ public class MinioAdminClient {
 
     try (Response response =
         execute(
-            Method.GET,
+            Http.Method.GET,
             Command.LIST_SERVICE_ACCOUNTS,
             ImmutableMultimap.of("user", username),
             null)) {
@@ -833,7 +835,7 @@ public class MinioAdminClient {
     }
     try (Response response =
         execute(
-            Method.GET,
+            Http.Method.GET,
             Command.INFO_SERVICE_ACCOUNT,
             ImmutableMultimap.of("accessKey", accessKey),
             null)) {
@@ -857,8 +859,7 @@ public class MinioAdminClient {
    * @param readTimeout HTTP read timeout in milliseconds.
    */
   public void setTimeout(long connectTimeout, long writeTimeout, long readTimeout) {
-    this.httpClient =
-        HttpUtils.setTimeout(this.httpClient, connectTimeout, writeTimeout, readTimeout);
+    this.httpClient = Http.setTimeout(this.httpClient, connectTimeout, writeTimeout, readTimeout);
   }
 
   /**
@@ -873,7 +874,7 @@ public class MinioAdminClient {
    */
   @SuppressFBWarnings(value = "SIC", justification = "Should not be used in production anyways.")
   public void ignoreCertCheck() throws KeyManagementException, NoSuchAlgorithmException {
-    this.httpClient = HttpUtils.disableCertCheck(this.httpClient);
+    this.httpClient = Http.disableCertCheck(this.httpClient);
   }
 
   /**
@@ -885,8 +886,7 @@ public class MinioAdminClient {
    */
   public void setAppInfo(String name, String version) {
     if (name == null || version == null) return;
-    this.userAgent =
-        MinioProperties.INSTANCE.getDefaultUserAgent() + " " + name.trim() + "/" + version.trim();
+    this.userAgent = Utils.getDefaultUserAgent() + " " + name.trim() + "/" + version.trim();
   }
 
   /**
@@ -923,12 +923,12 @@ public class MinioAdminClient {
     private OkHttpClient httpClient;
 
     public Builder endpoint(String endpoint) {
-      this.baseUrl = HttpUtils.getBaseUrl(endpoint);
+      this.baseUrl = Utils.getBaseUrl(endpoint);
       return this;
     }
 
     public Builder endpoint(String endpoint, int port, boolean secure) {
-      HttpUrl url = HttpUtils.getBaseUrl(endpoint);
+      HttpUrl url = Utils.getBaseUrl(endpoint);
       if (port < 1 || port > 65535) {
         throw new IllegalArgumentException("port must be in range of 1 to 65535");
       }
@@ -938,20 +938,20 @@ public class MinioAdminClient {
     }
 
     public Builder endpoint(HttpUrl url) {
-      HttpUtils.validateNotNull(url, "url");
-      HttpUtils.validateUrl(url);
+      Utils.validateNotNull(url, "url");
+      Utils.validateUrl(url);
 
       this.baseUrl = url;
       return this;
     }
 
     public Builder endpoint(URL url) {
-      HttpUtils.validateNotNull(url, "url");
+      Utils.validateNotNull(url, "url");
       return endpoint(HttpUrl.get(url));
     }
 
     public Builder region(String region) {
-      HttpUtils.validateNotNull(region, "region");
+      Utils.validateNotNull(region, "region");
       this.region = region;
       return this;
     }
@@ -962,24 +962,22 @@ public class MinioAdminClient {
     }
 
     public Builder credentialsProvider(Provider provider) {
-      HttpUtils.validateNotNull(provider, "credential provider");
+      Utils.validateNotNull(provider, "credential provider");
       this.provider = provider;
       return this;
     }
 
     public Builder httpClient(OkHttpClient httpClient) {
-      HttpUtils.validateNotNull(httpClient, "http client");
+      Utils.validateNotNull(httpClient, "http client");
       this.httpClient = httpClient;
       return this;
     }
 
     public MinioAdminClient build() {
-      HttpUtils.validateNotNull(baseUrl, "base url");
-      HttpUtils.validateNotNull(provider, "credential provider");
+      Utils.validateNotNull(baseUrl, "base url");
+      Utils.validateNotNull(provider, "credential provider");
       if (httpClient == null) {
-        httpClient =
-            HttpUtils.newDefaultHttpClient(
-                DEFAULT_CONNECTION_TIMEOUT, DEFAULT_CONNECTION_TIMEOUT, DEFAULT_CONNECTION_TIMEOUT);
+        httpClient = Http.newDefaultClient();
       }
       return new MinioAdminClient(baseUrl, region, provider, httpClient);
     }

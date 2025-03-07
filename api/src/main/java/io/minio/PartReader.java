@@ -17,14 +17,17 @@
 
 package io.minio;
 
-import com.google.common.io.BaseEncoding;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Locale;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 
 /** PartReader reads part data from file or input stream sequentially and returns PartSource. */
@@ -42,12 +45,14 @@ class PartReader {
 
   private int partNumber;
   private long totalDataRead;
+  private Map<Checksum.Algorithm, Checksum.Hasher> hashers;
 
   private ByteBufferStream[] buffers;
   private byte[] oneByte = null;
   boolean eof;
 
-  private PartReader(long objectSize, long partSize, int partCount) {
+  private PartReader(long objectSize, long partSize, int partCount, Checksum.Algorithm[] algorithms)
+      throws NoSuchAlgorithmException {
     this.objectSize = objectSize;
     this.partSize = partSize;
     this.partCount = partCount;
@@ -57,27 +62,69 @@ class PartReader {
     if (bufferCount == 0) bufferCount++;
 
     this.buffers = new ByteBufferStream[(int) bufferCount];
+
+    if (algorithms != null) {
+      for (Checksum.Algorithm algorithm : algorithms) {
+        if (algorithm != null) {
+          if (this.hashers == null) this.hashers = new HashMap<>();
+          this.hashers.put(algorithm, algorithm.hasher());
+        }
+      }
+    }
   }
 
-  public PartReader(@Nonnull RandomAccessFile file, long objectSize, long partSize, int partCount) {
-    this(objectSize, partSize, partCount);
+  public PartReader(
+      @Nonnull RandomAccessFile file,
+      long objectSize,
+      long partSize,
+      int partCount,
+      Checksum.Algorithm... algorithms)
+      throws NoSuchAlgorithmException {
+    this(objectSize, partSize, partCount, algorithms);
     this.file = Objects.requireNonNull(file, "file must not be null");
     if (this.objectSize < 0) throw new IllegalArgumentException("object size must be provided");
   }
 
-  public PartReader(@Nonnull InputStream stream, long objectSize, long partSize, int partCount) {
-    this(objectSize, partSize, partCount);
+  public PartReader(
+      @Nonnull InputStream stream,
+      long objectSize,
+      long partSize,
+      int partCount,
+      Checksum.Algorithm... algorithms)
+      throws NoSuchAlgorithmException {
+    this(objectSize, partSize, partCount, algorithms);
     this.stream = Objects.requireNonNull(stream, "stream must not be null");
     for (int i = 0; i < this.buffers.length; i++) this.buffers[i] = new ByteBufferStream();
   }
 
-  private long readStreamChunk(ByteBufferStream buffer, long size, MessageDigest sha256)
-      throws IOException {
+  private void updateHashers(byte[] data, int off, int len) {
+    if (this.hashers == null || this.hashers.size() == 0) return;
+
+    Set<Map.Entry<Checksum.Algorithm, Checksum.Hasher>> entries = this.hashers.entrySet();
+    if (entries.size() != 1) {
+      ExecutorService executor = Executors.newFixedThreadPool(this.hashers.size());
+      for (Map.Entry<Checksum.Algorithm, Checksum.Hasher> entry : entries) {
+        if (executor.submit(() -> entry.getValue().update(data, off, len)) == null) {
+          throw new RuntimeException("this should not happen");
+        }
+      }
+      executor.shutdown();
+      try {
+        executor.awaitTermination(5, TimeUnit.MINUTES);
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    } else {
+      entries.iterator().next().getValue().update(data, off, len);
+    }
+  }
+
+  private long readStreamChunk(ByteBufferStream buffer, long size) throws IOException {
     long totalBytesRead = 0;
 
     if (this.oneByte != null) {
       buffer.write(this.oneByte);
-      sha256.update(this.oneByte);
+      this.updateHashers(this.oneByte, 0, this.oneByte.length);
       totalBytesRead++;
       this.oneByte = null;
     }
@@ -92,14 +139,14 @@ class PartReader {
         throw new IOException("unexpected EOF");
       }
       buffer.write(this.buf16k, 0, bytesRead);
-      sha256.update(this.buf16k, 0, bytesRead);
+      this.updateHashers(this.buf16k, 0, bytesRead);
       totalBytesRead += bytesRead;
     }
 
     return totalBytesRead;
   }
 
-  private long readStream(long size, MessageDigest sha256) throws IOException {
+  private long readStream(long size) throws IOException {
     long count = size / CHUNK_SIZE;
     long lastChunkSize = size - (count * CHUNK_SIZE);
     if (lastChunkSize > 0) {
@@ -112,7 +159,7 @@ class PartReader {
     for (int i = 0; i < buffers.length; i++) buffers[i].reset();
     for (long i = 1; i <= count && !this.eof; i++) {
       long chunkSize = (i != count) ? CHUNK_SIZE : lastChunkSize;
-      long bytesRead = this.readStreamChunk(buffers[(int) (i - 1)], chunkSize, sha256);
+      long bytesRead = this.readStreamChunk(buffers[(int) (i - 1)], chunkSize);
       totalBytesRead += bytesRead;
     }
 
@@ -124,7 +171,7 @@ class PartReader {
     return totalBytesRead;
   }
 
-  private long readFile(long size, MessageDigest sha256) throws IOException {
+  private long readFile(long size) throws IOException {
     long position = this.file.getFilePointer();
     long totalBytesRead = 0;
 
@@ -133,7 +180,7 @@ class PartReader {
       if (bytesToRead > this.buf16k.length) bytesToRead = this.buf16k.length;
       int bytesRead = this.file.read(this.buf16k, 0, (int) bytesToRead);
       if (bytesRead < 0) throw new IOException("unexpected EOF");
-      sha256.update(this.buf16k, 0, bytesRead);
+      this.updateHashers(this.buf16k, 0, bytesRead);
       totalBytesRead += bytesRead;
     }
 
@@ -141,8 +188,8 @@ class PartReader {
     return totalBytesRead;
   }
 
-  private long read(long size, MessageDigest sha256) throws IOException {
-    return (this.file != null) ? readFile(size, sha256) : readStream(size, sha256);
+  private long read(long size) throws IOException {
+    return (this.file != null) ? readFile(size) : readStream(size);
   }
 
   public PartSource getPart() throws NoSuchAlgorithmException, IOException {
@@ -150,21 +197,25 @@ class PartReader {
 
     this.partNumber++;
 
-    MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-
     long partSize = this.partSize;
     if (this.partNumber == this.partCount) partSize = this.objectSize - this.totalDataRead;
-    long bytesRead = this.read(partSize, sha256);
+    long bytesRead = this.read(partSize);
     this.totalDataRead += bytesRead;
     if (this.objectSize < 0 && this.eof) this.partCount = this.partNumber;
 
-    String sha256Hash = BaseEncoding.base16().encode(sha256.digest()).toLowerCase(Locale.US);
-
-    if (this.file != null) {
-      return new PartSource(this.partNumber, this.file, bytesRead, null, sha256Hash);
+    Map<Checksum.Algorithm, byte[]> checksums = null;
+    if (this.hashers != null) {
+      checksums = new HashMap<>();
+      for (Map.Entry<Checksum.Algorithm, Checksum.Hasher> entry : this.hashers.entrySet()) {
+        checksums.put(entry.getKey(), entry.getValue().sum());
+      }
     }
 
-    return new PartSource(this.partNumber, this.buffers, bytesRead, null, sha256Hash);
+    if (this.file != null) {
+      return new PartSource(this.partNumber, this.file, bytesRead, checksums);
+    }
+
+    return new PartSource(this.partNumber, this.buffers, bytesRead, checksums);
   }
 
   public int partCount() {
