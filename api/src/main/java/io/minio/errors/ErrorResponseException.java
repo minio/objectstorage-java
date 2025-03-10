@@ -16,9 +16,7 @@
 
 package io.minio.errors;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.minio.messages.ErrorResponse;
-import okhttp3.Request;
 import okhttp3.Response;
 
 /** Thrown to indicate that error response is received when executing Amazon S3 operation. */
@@ -28,8 +26,8 @@ public class ErrorResponseException extends MinioException {
 
   private final ErrorResponse errorResponse;
 
-  @SuppressFBWarnings(
-      value = "Se",
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "SE_BAD_FIELD",
       justification = "There's really no excuse except that nobody has complained")
   private final Response response;
 
@@ -51,30 +49,19 @@ public class ErrorResponseException extends MinioException {
 
   @Override
   public String toString() {
-    Request request = response.request();
-    return "error occurred\n"
-        + errorResponse.toString()
-        + "\n"
-        + "request={"
-        + "method="
-        + request.method()
-        + ", "
-        + "url="
-        + request.url()
-        + ", "
-        + "headers="
-        + request
+    return String.format(
+        "S3 operation failed; ErrorResponseException{errorResponse=%s, request={method=%s, url=%s,"
+            + " headers=%s}, response={code=%s, headers=%s}}",
+        errorResponse.toString(),
+        response.request().method(),
+        response.request().url(),
+        response
+            .request()
             .headers()
             .toString()
             .replaceAll("Signature=([0-9a-f]+)", "Signature=*REDACTED*")
-            .replaceAll("Credential=([^/]+)", "Credential=*REDACTED*")
-        + "}\n"
-        + "response={"
-        + "code="
-        + response.code()
-        + ", "
-        + "headers="
-        + response.headers()
-        + "}\n";
+            .replaceAll("Credential=([^/]+)", "Credential=*REDACTED*"),
+        response.code(),
+        response.headers().toString());
   }
 }

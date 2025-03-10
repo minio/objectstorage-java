@@ -18,7 +18,7 @@ package io.minio.credentials;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.minio.messages.ResponseDate;
+import io.minio.Time;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.Objects;
@@ -45,13 +45,13 @@ public class Credentials {
 
   @Element(name = "Expiration")
   @JsonProperty("expiration")
-  private final ResponseDate expiration;
+  private final Time.S3Time expiration;
 
   public Credentials(
       @Nonnull @Element(name = "AccessKeyId") @JsonProperty("accessKey") String accessKey,
       @Nonnull @Element(name = "SecretAccessKey") @JsonProperty("secretKey") String secretKey,
       @Nullable @Element(name = "SessionToken") @JsonProperty("sessionToken") String sessionToken,
-      @Nullable @Element(name = "Expiration") @JsonProperty("expiration") ResponseDate expiration) {
+      @Nullable @Element(name = "Expiration") @JsonProperty("expiration") Time.S3Time expiration) {
     this.accessKey = Objects.requireNonNull(accessKey, "AccessKey must not be null");
     this.secretKey = Objects.requireNonNull(secretKey, "SecretKey must not be null");
     if (accessKey.isEmpty() || secretKey.isEmpty()) {
@@ -73,11 +73,15 @@ public class Credentials {
     return sessionToken;
   }
 
+  public ZonedDateTime expiration() {
+    return expiration == null ? null : expiration.toZonedDateTime();
+  }
+
   public boolean isExpired() {
     if (expiration == null) {
       return false;
     }
 
-    return ZonedDateTime.now().plus(Duration.ofSeconds(10)).isAfter(expiration.zonedDateTime());
+    return ZonedDateTime.now().plus(Duration.ofSeconds(10)).isAfter(expiration.toZonedDateTime());
   }
 }

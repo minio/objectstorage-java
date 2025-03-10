@@ -16,6 +16,7 @@
 
 package io.minio.messages;
 
+import io.minio.Utils;
 import java.io.Serializable;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Namespace;
@@ -106,28 +107,21 @@ public class ErrorResponse implements Serializable {
     return resource;
   }
 
-  /** Returns string representation of this object. */
+  protected String stringify() {
+    return String.format(
+        "code=%s, message=%s, bucketName=%s, objectName=%s, resource=%s,"
+            + " requestId=%s, hostId=%s",
+        Utils.stringify(code),
+        Utils.stringify(message),
+        Utils.stringify(bucketName),
+        Utils.stringify(objectName),
+        Utils.stringify(resource),
+        Utils.stringify(requestId),
+        Utils.stringify(hostId));
+  }
+
+  @Override
   public String toString() {
-    return "ErrorResponse(code = "
-        + code
-        + ", "
-        + "message = "
-        + message
-        + ", "
-        + "bucketName = "
-        + bucketName
-        + ", "
-        + "objectName = "
-        + objectName
-        + ", "
-        + "resource = "
-        + resource
-        + ", "
-        + "requestId = "
-        + requestId
-        + ", "
-        + "hostId = "
-        + hostId
-        + ")";
+    return String.format("ErrorResponse{%s}", stringify());
   }
 }

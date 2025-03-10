@@ -37,7 +37,7 @@ public class SetBucketEncryptionArgs extends BucketArgs {
   /** Argument builder of {@link SetBucketEncryptionArgs}. */
   public static final class Builder extends BucketArgs.Builder<Builder, SetBucketEncryptionArgs> {
     private void validateConfig(SseConfiguration config) {
-      validateNotNull(config, "encryption configuration");
+      Utils.validateNotNull(config, "encryption configuration");
     }
 
     protected void validate(SetBucketEncryptionArgs args) {

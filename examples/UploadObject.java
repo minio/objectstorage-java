@@ -15,7 +15,7 @@
  */
 
 import io.minio.MinioClient;
-import io.minio.ServerSideEncryptionCustomerKey;
+import io.minio.ServerSideEncryption;
 import io.minio.UploadObjectArgs;
 import io.minio.errors.MinioException;
 import java.io.IOException;
@@ -56,8 +56,8 @@ public class UploadObject {
       {
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(256);
-        ServerSideEncryptionCustomerKey ssec =
-            new ServerSideEncryptionCustomerKey(keyGen.generateKey());
+        ServerSideEncryption.CustomerKey ssec =
+            new ServerSideEncryption.CustomerKey(keyGen.generateKey());
 
         // Upload 'my-filename' as object encrypted 'my-objectname' in 'my-bucketname'.
         minioClient.uploadObject(

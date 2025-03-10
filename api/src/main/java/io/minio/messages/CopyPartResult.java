@@ -27,4 +27,9 @@ import org.simpleframework.xml.Root;
  */
 @Root(name = "CopyPartResult", strict = false)
 @Namespace(reference = "http://s3.amazonaws.com/doc/2006-03-01/")
-public class CopyPartResult extends CopyObjectResult {}
+public class CopyPartResult extends CopyObjectResult {
+  @Override
+  public String toString() {
+    return String.format("CopyPartResult{%s}", super.stringify());
+  }
+}

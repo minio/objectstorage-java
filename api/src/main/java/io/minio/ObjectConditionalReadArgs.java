@@ -92,9 +92,9 @@ public abstract class ObjectConditionalReadArgs extends ObjectReadArgs {
   public Multimap<String, String> genCopyHeaders() {
     Multimap<String, String> headers = HashMultimap.create();
 
-    String copySource = S3Escaper.encodePath("/" + bucketName + "/" + objectName);
+    String copySource = Utils.encodePath("/" + bucketName + "/" + objectName);
     if (versionId != null) {
-      copySource += "?versionId=" + S3Escaper.encode(versionId);
+      copySource += "?versionId=" + Utils.encode(versionId);
     }
 
     headers.put("x-amz-copy-source", copySource);
@@ -147,13 +147,13 @@ public abstract class ObjectConditionalReadArgs extends ObjectReadArgs {
     }
 
     public B matchETag(String etag) {
-      validateNullOrNotEmptyString(etag, "etag");
+      Utils.validateNullOrNotEmptyString(etag, "etag");
       operations.add(args -> args.matchETag = etag);
       return (B) this;
     }
 
     public B notMatchETag(String etag) {
-      validateNullOrNotEmptyString(etag, "etag");
+      Utils.validateNullOrNotEmptyString(etag, "etag");
       operations.add(args -> args.notMatchETag = etag);
       return (B) this;
     }

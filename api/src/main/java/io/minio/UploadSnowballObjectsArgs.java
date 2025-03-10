@@ -51,7 +51,7 @@ public class UploadSnowballObjectsArgs extends ObjectWriteArgs {
   public static final class Builder
       extends ObjectWriteArgs.Builder<Builder, UploadSnowballObjectsArgs> {
     private void validateObjects(Iterable<SnowballObject> objects) {
-      validateNotNull(objects, "objects");
+      Utils.validateNotNull(objects, "objects");
     }
 
     @Override

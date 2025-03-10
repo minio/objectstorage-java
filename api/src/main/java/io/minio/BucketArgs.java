@@ -16,8 +16,6 @@
 
 package io.minio;
 
-import io.minio.http.HttpUtils;
-import io.minio.org.apache.commons.validator.routines.InetAddressValidator;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -42,7 +40,7 @@ public abstract class BucketArgs extends BaseArgs {
     protected boolean skipValidation = false;
 
     protected void validateBucketName(String name) {
-      validateNotNull(name, "bucket name");
+      Utils.validateNotNull(name, "bucket name");
       if (skipValidation) {
         return;
       }
@@ -55,7 +53,7 @@ public abstract class BucketArgs extends BaseArgs {
                 + "https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html");
       }
 
-      if (InetAddressValidator.getInstance().isValidInet4Address(name)) {
+      if (Utils.isValidIPv4(name)) {
         throw new IllegalArgumentException(
             "bucket name '" + name + "' must not be formatted as an IP address");
       }
@@ -67,7 +65,7 @@ public abstract class BucketArgs extends BaseArgs {
     }
 
     private void validateRegion(String region) {
-      if (!skipValidation && region != null && !HttpUtils.REGION_REGEX.matcher(region).find()) {
+      if (!skipValidation && region != null && !Utils.REGION_REGEX.matcher(region).find()) {
         throw new IllegalArgumentException("invalid region " + region);
       }
     }

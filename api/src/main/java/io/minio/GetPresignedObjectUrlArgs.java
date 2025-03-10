@@ -16,7 +16,6 @@
 
 package io.minio;
 
-import io.minio.http.Method;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -28,10 +27,10 @@ public class GetPresignedObjectUrlArgs extends ObjectVersionArgs {
   // default expiration for a presigned URL is 7 days in seconds
   public static final int DEFAULT_EXPIRY_TIME = (int) TimeUnit.DAYS.toSeconds(7);
 
-  private Method method;
+  private Http.Method method;
   private int expiry = DEFAULT_EXPIRY_TIME;
 
-  public Method method() {
+  public Http.Method method() {
     return method;
   }
 
@@ -46,8 +45,8 @@ public class GetPresignedObjectUrlArgs extends ObjectVersionArgs {
   /** Argument builder of {@link GetPresignedObjectUrlArgs}. */
   public static final class Builder
       extends ObjectVersionArgs.Builder<Builder, GetPresignedObjectUrlArgs> {
-    private void validateMethod(Method method) {
-      validateNotNull(method, "method");
+    private void validateMethod(Http.Method method) {
+      Utils.validateNotNull(method, "method");
     }
 
     private void validateExpiry(int expiry) {
@@ -60,7 +59,7 @@ public class GetPresignedObjectUrlArgs extends ObjectVersionArgs {
     }
 
     /* method HTTP {@link Method} to generate presigned URL. */
-    public Builder method(Method method) {
+    public Builder method(Http.Method method) {
       validateMethod(method);
       operations.add(args -> args.method = method);
       return this;

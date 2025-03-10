@@ -15,9 +15,9 @@
  */
 
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.Http;
 import io.minio.MinioClient;
 import io.minio.errors.MinioException;
-import io.minio.http.Method;
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -46,7 +46,7 @@ public class PresignedGetObject {
       String url =
           minioClient.getPresignedObjectUrl(
               GetPresignedObjectUrlArgs.builder()
-                  .method(Method.GET)
+                  .method(Http.Method.GET)
                   .bucket("my-bucketname")
                   .object("my-objectname")
                   .expiry(60 * 60 * 24)

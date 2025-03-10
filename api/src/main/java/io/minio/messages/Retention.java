@@ -16,6 +16,8 @@
 
 package io.minio.messages;
 
+import io.minio.Time;
+import io.minio.Utils;
 import java.time.ZonedDateTime;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Namespace;
@@ -35,7 +37,7 @@ public class Retention {
   private RetentionMode mode;
 
   @Element(name = "RetainUntilDate", required = false)
-  private ResponseDate retainUntilDate;
+  private Time.S3Time retainUntilDate;
 
   public Retention() {}
 
@@ -50,7 +52,7 @@ public class Retention {
     }
 
     this.mode = mode;
-    this.retainUntilDate = new ResponseDate(retainUntilDate);
+    this.retainUntilDate = new Time.S3Time(retainUntilDate);
   }
 
   /** Returns mode. */
@@ -60,10 +62,13 @@ public class Retention {
 
   /** Returns retain until date. */
   public ZonedDateTime retainUntilDate() {
-    if (retainUntilDate != null) {
-      return retainUntilDate.zonedDateTime();
-    }
+    return retainUntilDate == null ? null : retainUntilDate.toZonedDateTime();
+  }
 
-    return null;
+  @Override
+  public String toString() {
+    return String.format(
+        "Retention{mode=%s, retainUntilDate=%s}",
+        Utils.stringify(mode), Utils.stringify(retainUntilDate));
   }
 }

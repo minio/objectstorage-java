@@ -51,7 +51,7 @@ public class GetObjectAttributesArgs extends ObjectReadArgs {
     @Override
     protected void validate(GetObjectAttributesArgs args) {
       super.validate(args);
-      validateNotNull(args.objectAttributes, "object attributes");
+      Utils.validateNotNull(args.objectAttributes, "object attributes");
     }
 
     public Builder objectAttributes(String[] objectAttributes) {

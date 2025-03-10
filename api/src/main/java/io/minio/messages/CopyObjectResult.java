@@ -17,6 +17,8 @@
 
 package io.minio.messages;
 
+import io.minio.Time;
+import io.minio.Utils;
 import java.time.ZonedDateTime;
 import org.simpleframework.xml.Element;
 import org.simpleframework.xml.Namespace;
@@ -28,30 +30,12 @@ import org.simpleframework.xml.Root;
  */
 @Root(name = "CopyObjectResult", strict = false)
 @Namespace(reference = "http://s3.amazonaws.com/doc/2006-03-01/")
-public class CopyObjectResult {
+public class CopyObjectResult extends Checksum {
   @Element(name = "ETag")
   private String etag;
 
   @Element(name = "LastModified")
-  private ResponseDate lastModified;
-
-  @Element(name = "ChecksumType", required = false)
-  private String checksumType;
-
-  @Element(name = "ChecksumCRC32", required = false)
-  private String checksumCRC32;
-
-  @Element(name = "ChecksumCRC32C", required = false)
-  private String checksumCRC32C;
-
-  @Element(name = "ChecksumCRC64NVME", required = false)
-  private String checksumCRC64NVME;
-
-  @Element(name = "ChecksumSHA1", required = false)
-  private String checksumSHA1;
-
-  @Element(name = "ChecksumSHA256", required = false)
-  private String checksumSHA256;
+  private Time.S3Time lastModified;
 
   public CopyObjectResult() {}
 
@@ -62,30 +46,17 @@ public class CopyObjectResult {
 
   /** Returns last modified time. */
   public ZonedDateTime lastModified() {
-    return lastModified.zonedDateTime();
+    return lastModified == null ? null : lastModified.toZonedDateTime();
   }
 
-  public String checksumType() {
-    return checksumType;
+  protected String stringify() {
+    return String.format(
+        "etag=%s, lastModified=%s, %s",
+        Utils.stringify(etag), Utils.stringify(lastModified), super.stringify());
   }
 
-  public String checksumCRC32() {
-    return checksumCRC32;
-  }
-
-  public String checksumCRC32C() {
-    return checksumCRC32C;
-  }
-
-  public String checksumCRC64NVME() {
-    return checksumCRC64NVME;
-  }
-
-  public String checksumSHA1() {
-    return checksumSHA1;
-  }
-
-  public String checksumSHA256() {
-    return checksumSHA256;
+  @Override
+  public String toString() {
+    return String.format("CopyObjectResult{%s}", stringify());
   }
 }

@@ -40,7 +40,7 @@ public class DownloadObjectArgs extends ObjectReadArgs {
   /** Argument class of {@link DownloadObjectArgs}. */
   public static final class Builder extends ObjectReadArgs.Builder<Builder, DownloadObjectArgs> {
     private void validateFilename(String filename) {
-      validateNotEmptyString(filename, "filename");
+      Utils.validateNotEmptyString(filename, "filename");
     }
 
     public Builder filename(String filename) {

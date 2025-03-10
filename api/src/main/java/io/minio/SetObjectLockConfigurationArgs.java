@@ -38,7 +38,7 @@ public class SetObjectLockConfigurationArgs extends BucketArgs {
   public static final class Builder
       extends BucketArgs.Builder<Builder, SetObjectLockConfigurationArgs> {
     private void validateConfig(ObjectLockConfiguration config) {
-      validateNotNull(config, "object-lock configuration");
+      Utils.validateNotNull(config, "object-lock configuration");
     }
 
     @Override

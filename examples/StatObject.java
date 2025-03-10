@@ -15,7 +15,7 @@
  */
 
 import io.minio.MinioClient;
-import io.minio.ServerSideEncryptionCustomerKey;
+import io.minio.ServerSideEncryption;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
 import io.minio.errors.MinioException;
@@ -46,8 +46,8 @@ public class StatObject {
 
       KeyGenerator keyGen = KeyGenerator.getInstance("AES");
       keyGen.init(256);
-      ServerSideEncryptionCustomerKey ssec =
-          new ServerSideEncryptionCustomerKey(keyGen.generateKey());
+      ServerSideEncryption.CustomerKey ssec =
+          new ServerSideEncryption.CustomerKey(keyGen.generateKey());
       String versionId = "ac38316c-fe14-4f96-9f76-8f675ae5a79e";
 
       {

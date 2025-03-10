@@ -31,4 +31,9 @@ public class Contents extends Item {
   public Contents(String prefix) {
     super(prefix);
   }
+
+  @Override
+  public String toString() {
+    return String.format("Contents{%s}", super.toString());
+  }
 }
